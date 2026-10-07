@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kaagaz</string>
+    <string name="tagline">Private paperwork, processed on your device.</string>
+    <string name="pipeline_ready">Development pipeline ready</string>
+    <string name="pipeline_ready_description">Confirm the Kaagaz Android development pipeline</string>
+    <string name="pipeline_confirmed">Kaagaz is ready for development</string>
+</resources>

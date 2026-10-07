@@ -1,9 +1,22 @@
-# Android client
+# Kaagaz Android
 
-Primary implementation target: native Android with Kotlin.
+Minimal native Android/Kotlin starter used to verify the complete build, install, launch, and logging pipeline.
 
-Create the app here with Android Studio after its SDK setup wizard completes. Use one current stable compile SDK, the matching build-tools and platform-tools, and Android Studio's bundled JDK unless the generated project requires another version.
+## Toolchain
 
-Suggested package boundaries: `ingest`, `ocr`, `classify`, `extract`, `verify`, `evidence`, `timeline`, `qa`, and `storage`.
+- Android Gradle Plugin 9.0.1
+- Gradle 9.1.0
+- Built-in Kotlin 2.2.10
+- JDK 17
+- compileSdk / targetSdk 36
+- minSdk 26
 
-Avoid adding API keys to Gradle files or resources. Prefer on-device OCR and synthetic sample documents for the demo.
+## Build
+
+```powershell
+.\gradlew.bat --no-daemon :app:assembleDebug
+```
+
+The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+
+The starter uses only Android platform APIs. It intentionally has no UI framework, OCR, networking, analytics, or AI dependencies yet.

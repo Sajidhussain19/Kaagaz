@@ -70,3 +70,15 @@
 - Android Studio's executable launch was verified, but native-window inspection was unavailable through the Windows control helper.
 - An unnecessary emulator package and Android 37 system image need explicit approval before removal.
 - Standalone `gradle` is not installed. Android SDK build-tools are ready; a project-specific Gradle wrapper will be generated with the first Android project.
+
+## Native Android pipeline test — 2026-10-07
+
+- Created a minimal native Kotlin app at `android/` with package `com.kaagaz.app`.
+- Toolchain: Android Gradle Plugin 9.0.1, Gradle Wrapper 9.1.0, AGP built-in Kotlin 2.2.10, JDK 17.
+- SDK configuration: compileSdk 36, targetSdk 36, minSdk 26, Build-Tools 36.1.0.
+- Built `android/app/build/outputs/apk/debug/app-debug.apk` successfully (34 tasks, 847,522 bytes).
+- Installed the debug APK on the authorized Samsung SM-S711B with `adb install -r`: success.
+- Launched `com.kaagaz.app/.MainActivity`: status `ok`, cold start 753 ms, process created.
+- Verified tagged logcat output for both `onCreate` and `onResume`.
+- No device changes were made beyond installing and launching the debug APK.
+- Remaining build warning: AGP reported SDK XML version 4 while its parser understands up to version 3. This did not affect compilation, packaging, installation, or launch.
