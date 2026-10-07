@@ -51,7 +51,8 @@
   - Build-Tools 36.1.0
   - Platform-Tools / ADB 37.0.1
   - Command-line tools 23.0 (`sdkmanager` available; Android CLI 1.0.16500706)
-  - SDK licenses accepted; no emulator or system image installed
+  - SDK licenses accepted
+  - Android Studio's first-run launch automatically added Android Emulator 37.2.12 and `system-images;android-37.0;google_apis_playstore;x86_64`. No AVD was created. These were not removed because uninstalling requires explicit approval.
 - Vivo OfficeKit 6.8.2: installed from Vivo's official publisher endpoint; its main window starts and responds. A separate window titled `Error` also appeared, so feature readiness is not claimed.
 - Python 3.12.10 and pip 25.0.1: `py -3.12` works; a temporary virtual environment was created, verified, and deleted.
 - GitHub CLI 2.102.0: executable works; no GitHub host is authenticated.
@@ -67,4 +68,5 @@
 - Bare `python` still resolves to Python 3.14.3 because `C:\Python314` precedes user paths in the machine-wide PATH. The attempted non-destructive machine PATH reorder was denied; no Python installation was removed or renamed.
 - OfficeKit phone pairing and device features remain unverified without the physical iQOO phone.
 - Android Studio's executable launch was verified, but native-window inspection was unavailable through the Windows control helper.
+- An unnecessary emulator package and Android 37 system image need explicit approval before removal.
 - Standalone `gradle` is not installed. Android SDK build-tools are ready; a project-specific Gradle wrapper will be generated with the first Android project.
