@@ -1,0 +1,51 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+credentials*.json
+secrets*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+google-services.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+captures/
+.cxx/
+*.apk
+*.aab
+
+# Node
+node_modules/
+npm-debug.log*
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Models and user documents
+models/
+*.onnx
+*.safetensors
+*.gguf
+demo/private/
+data/private/
