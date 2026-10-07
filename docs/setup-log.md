@@ -39,3 +39,32 @@
 - Vivo OfficeKit launch and feature tests (installation did not complete)
 - Android Studio launch and SDK setup (installation did not complete)
 - Python 3.12 repair/reinstall and clean venv creation
+
+## Second audit — 2026-10-07
+
+### Installed and verified
+
+- Microsoft OpenJDK 17.0.20.1: `java` and `javac` launch successfully; `JAVA_HOME` is set.
+- Android Studio 2026.2: installed from `Google.AndroidStudio`; `studio64.exe` starts as a responsive process.
+- Android SDK at `C:\Users\sajid\AppData\Local\Android\Sdk`:
+  - Android 16 / API 36 platform revision 2
+  - Build-Tools 36.1.0
+  - Platform-Tools / ADB 37.0.1
+  - Command-line tools 23.0 (`sdkmanager` available; Android CLI 1.0.16500706)
+  - SDK licenses accepted; no emulator or system image installed
+- Vivo OfficeKit 6.8.2: installed from Vivo's official publisher endpoint; its main window starts and responds. A separate window titled `Error` also appeared, so feature readiness is not claimed.
+- Python 3.12.10 and pip 25.0.1: `py -3.12` works; a temporary virtual environment was created, verified, and deleted.
+- GitHub CLI 2.102.0: executable works; no GitHub host is authenticated.
+
+### Environment changes
+
+- Set per-user `ANDROID_HOME` and `ANDROID_SDK_ROOT` to the standard Android SDK path.
+- Added SDK `platform-tools` and command-line tools to the per-user PATH.
+- Set `PY_PYTHON=3.12` for the Python launcher.
+
+### Remaining limitations
+
+- Bare `python` still resolves to Python 3.14.3 because `C:\Python314` precedes user paths in the machine-wide PATH. The attempted non-destructive machine PATH reorder was denied; no Python installation was removed or renamed.
+- OfficeKit phone pairing and device features remain unverified without the physical iQOO phone.
+- Android Studio's executable launch was verified, but native-window inspection was unavailable through the Windows control helper.
+- Standalone `gradle` is not installed. Android SDK build-tools are ready; a project-specific Gradle wrapper will be generated with the first Android project.
