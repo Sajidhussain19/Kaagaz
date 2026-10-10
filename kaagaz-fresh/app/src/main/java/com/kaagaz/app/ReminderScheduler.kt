@@ -19,7 +19,7 @@ class ReminderScheduler(context: Context) {
                 .atTime(9, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
             if (trigger > nowMillis) {
                 val data = Data.Builder().putString(ReminderWorker.KEY_DOCUMENT_ID, reminder.documentId)
-                    .putInt(ReminderWorker.KEY_OFFSET, offset).build()
+                    .putInt(ReminderWorker.KEY_OFFSET, offset).putString(ReminderWorker.KEY_DEADLINE_TYPE, reminder.deadlineType).build()
                 val request = OneTimeWorkRequestBuilder<ReminderWorker>()
                     .setInitialDelay(trigger - nowMillis, TimeUnit.MILLISECONDS)
                     .setInputData(data).addTag(tag(reminder.documentId)).build()

@@ -16,11 +16,12 @@ class ReminderWorker(context: Context, params: WorkerParameters) : Worker(contex
     override fun doWork(): Result {
         val documentId = inputData.getString(KEY_DOCUMENT_ID) ?: return Result.failure()
         val offset = inputData.getInt(KEY_OFFSET, -1)
+        val deadlineType = inputData.getString(KEY_DEADLINE_TYPE) ?: "POLICY_EXPIRY"
         val store = KaagazStore(applicationContext)
         val reminder: DeadlineReminder?
         val documentExists: Boolean
         try {
-            reminder = store.getReminder(documentId)
+            reminder = store.getReminder(documentId, deadlineType)
             documentExists = store.load(documentId)?.document?.uri?.path?.let { File(it).isFile } == true
             if (!documentExists) store.deleteReminder(documentId)
         } finally { store.close() }
@@ -36,7 +37,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : Worker(contex
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Kaagaz deadline reminder")
-            .setContentText("Your policy expires $timing.")
+            .setContentText(if (deadlineType == "BILL_DUE") "A bill (${reminder.sourceValue}) is due $timing." else "Your policy expires $timing.")
             .setAutoCancel(true).build()
         NotificationManagerCompat.from(applicationContext).notify(ReminderPolicy.workName(documentId, reminder.deadlineType, offset).hashCode(), notification)
         return Result.success()
@@ -45,6 +46,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : Worker(contex
     companion object {
         const val KEY_DOCUMENT_ID = "document_id"
         const val KEY_OFFSET = "offset"
+        const val KEY_DEADLINE_TYPE = "deadline_type"
         private const val CHANNEL_ID = "kaagaz_deadlines"
     }
 }

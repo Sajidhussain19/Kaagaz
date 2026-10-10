@@ -32,5 +32,8 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.13.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // On-device LLM runtime for Gemma (.litertlm models). Model weights are NOT bundled; the user imports them.
+    // 0.16.1 is the newest release built with Kotlin 2.2 (0.17+ needs a Kotlin 2.4 compiler; AGP 9.0.1 bundles 2.2).
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
     testImplementation("junit:junit:4.13.2")
 }

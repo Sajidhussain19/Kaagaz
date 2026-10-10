@@ -46,11 +46,13 @@ class KaagazStore(private val context: Context) : SQLiteOpenHelper(context, DB_N
             FOREIGN KEY(document_id, field_key) REFERENCES insurance_fields(document_id, field_key) ON DELETE CASCADE)""")
         createRemindersTable(db)
         createDocumentLinksTable(db)
+        createMissionTables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createRemindersTable(db)
         if (oldVersion < 3) createDocumentLinksTable(db)
+        if (oldVersion < 4) createMissionTables(db)
     }
 
     fun import(uri: Uri, name: String, type: DocumentType, mimeType: String, pageCount: Int): SelectedDocument {
@@ -114,9 +116,9 @@ class KaagazStore(private val context: Context) : SQLiteOpenHelper(context, DB_N
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    fun getReminder(documentId: String): DeadlineReminder? = readableDatabase.rawQuery(
-        "SELECT deadline_type,deadline_epoch_day,source_value,source_status,offsets_days,state,updated_at FROM reminders WHERE document_id=? AND deadline_type='POLICY_EXPIRY'",
-        arrayOf(documentId)
+    fun getReminder(documentId: String, deadlineType: String = "POLICY_EXPIRY"): DeadlineReminder? = readableDatabase.rawQuery(
+        "SELECT deadline_type,deadline_epoch_day,source_value,source_status,offsets_days,state,updated_at FROM reminders WHERE document_id=? AND deadline_type=?",
+        arrayOf(documentId, deadlineType)
     ).use { cursor ->
         if (!cursor.moveToFirst()) null else DeadlineReminder(
             documentId, cursor.getString(0), cursor.getLong(1), cursor.getString(2), cursor.getString(3),
@@ -267,5 +269,25 @@ class KaagazStore(private val context: Context) : SQLiteOpenHelper(context, DB_N
             FOREIGN KEY(supporting_document_id) REFERENCES documents(id) ON DELETE CASCADE)""")
     }
 
-    companion object { private const val DB_NAME = "kaagaz.db"; private const val DB_VERSION = 3 }
+    /** Mission OS state: only user decisions are stored; facts are re-derived from saved OCR text on demand. */
+    private fun createMissionTables(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fact_resolutions (
+            fact_type TEXT PRIMARY KEY, chosen_normalized TEXT NOT NULL, resolved_at INTEGER NOT NULL)""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS fact_corrections (
+            document_id TEXT NOT NULL, fact_type TEXT NOT NULL, original_normalized TEXT NOT NULL,
+            corrected_value TEXT NOT NULL, corrected_at INTEGER NOT NULL,
+            PRIMARY KEY(document_id, fact_type, original_normalized),
+            FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE)""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS finding_states (
+            finding_id TEXT PRIMARY KEY, state TEXT NOT NULL, note TEXT, updated_at INTEGER NOT NULL)""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS missions (
+            id TEXT PRIMARY KEY, goal TEXT NOT NULL, planned_by TEXT NOT NULL, phase TEXT NOT NULL,
+            steps_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS form_values (
+            form_id TEXT NOT NULL, field_id TEXT NOT NULL, value TEXT NOT NULL, source TEXT NOT NULL, filled_at INTEGER NOT NULL,
+            PRIMARY KEY(form_id, field_id))""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fact_corrections_doc ON fact_corrections(document_id)")
+    }
+
+    companion object { private const val DB_NAME = "kaagaz.db"; private const val DB_VERSION = 4 }
 }
