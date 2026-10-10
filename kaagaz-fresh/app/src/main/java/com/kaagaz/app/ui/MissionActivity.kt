@@ -135,6 +135,12 @@ class MissionActivity : ComponentActivity() {
     /** "Share to Kaagaz" / "Open with Kaagaz" from any app: PDFs and images go through the same on-device pipeline. */
     private fun handleIncoming(intent: Intent?) {
         intent ?: return
+        intent.getStringExtra(EXTRA_SCREEN)?.let { target ->
+            intent.removeExtra(EXTRA_SCREEN)
+            screen = when (target) { SCREEN_ASK -> Screen.ASK; SCREEN_CRASH -> { crashResults = null; Screen.CRASH }; else -> Screen.HOME }
+            knowledge.invalidate(); snap = null; refresh()
+            return
+        }
         val uris: List<Uri> = when (intent.action) {
             Intent.ACTION_SEND -> listOfNotNull(intent.parcelableUri(Intent.EXTRA_STREAM))
             Intent.ACTION_SEND_MULTIPLE -> intent.parcelableUris(Intent.EXTRA_STREAM)
@@ -1006,5 +1012,10 @@ class MissionActivity : ComponentActivity() {
         packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS).requestedPermissions?.contains(Manifest.permission.INTERNET) == true
     }.getOrDefault(false)
 
-    companion object { const val SOURCE_TYPED = "typed" }
+    companion object {
+        const val SOURCE_TYPED = "typed"
+        const val EXTRA_SCREEN = "com.kaagaz.app.MISSION_SCREEN"
+        const val SCREEN_ASK = "ASK"
+        const val SCREEN_CRASH = "CRASH"
+    }
 }

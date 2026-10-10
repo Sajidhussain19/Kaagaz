@@ -32,9 +32,10 @@ Git history marks the boundary. Commit `3c955af` ("Snapshot kaagaz-fresh before 
 - OCR engine and ingestion pipeline; share-sheet and camera intake; demo pack
 - Proof Pack export
 - Today's Brief
+- Type-aware document summaries (fact-grounded, with an optional Gemma summary whose names and numbers are checked)
 - Mission OS UI and design system, and the dark re-skin of the document screens
 - Package architecture
-- 43 new unit tests
+- 50 new unit tests
 - All documentation in `docs/`
 
 AI coding assistance (Claude) was used during development; the commits carry a `Co-Authored-By` trailer.

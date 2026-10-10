@@ -51,7 +51,13 @@ import com.kaagaz.app.core.VerificationStatus
 import com.kaagaz.app.data.KaagazStore
 import com.kaagaz.app.insurance.CoverageIntelligenceEngine
 import com.kaagaz.app.insurance.CrossDocumentCoverageEngine
+import android.content.Intent
 import com.kaagaz.app.insurance.DocumentKind
+import com.kaagaz.app.knowledge.DocKind
+import com.kaagaz.app.knowledge.Fact
+import com.kaagaz.app.knowledge.FactExtractor
+import com.kaagaz.app.llm.Services
+import com.kaagaz.app.rag.DocumentSummarizer
 import com.kaagaz.app.insurance.DocumentProfile
 import com.kaagaz.app.insurance.DocumentQaEngine
 import com.kaagaz.app.insurance.InsuranceExtractor
@@ -98,9 +104,16 @@ class DocumentActivity : ComponentActivity() {
     }
 
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null) Toast.makeText(this, "Document selection cancelled", Toast.LENGTH_SHORT).show()
-        else inspectAndPreview(uri)
+        if (uri != null) inspectAndPreview(uri)
+        else {
+            Toast.makeText(this, "Document selection cancelled", Toast.LENGTH_SHORT).show()
+            // Opened only to pick a file: nothing to show here, so return to Mission control.
+            if (screen == Screen.PICKING) finish()
+        }
     }
+
+    /** How Mission OS opened this screen; decides where "back" and "delete" lead. */
+    private var launchedFor: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -121,13 +134,36 @@ class DocumentActivity : ComponentActivity() {
         when {
             openId != null -> {
                 val item = runCatching { store.listDocuments().firstOrNull { it.id == openId } }.getOrNull() ?: return false
+                launchedFor = LAUNCH_OPEN
                 openSavedDocument(item)
+                previewReturnsToLibrary = false
             }
-            intent.getBooleanExtra(EXTRA_PICK_DOCUMENT, false) -> { showHome(); launchPicker() }
-            intent.getBooleanExtra(EXTRA_LIBRARY, false) -> showLibrary()
+            intent.getBooleanExtra(EXTRA_PICK_DOCUMENT, false) -> { launchedFor = LAUNCH_PICK; showPicking(); launchPicker() }
+            intent.getBooleanExtra(EXTRA_LIBRARY, false) -> { launchedFor = LAUNCH_LIBRARY; showLibrary() }
             else -> return false
         }
         return true
+    }
+
+    /** Placeholder while the system picker is open; cancelling the picker closes it. */
+    private fun showPicking() {
+        screen = Screen.PICKING
+        val content = page()
+        content.addView(textButton("←  Mission control") { finish() })
+        content.addView(label("IMPORT", 12, forest).apply { letterSpacing = .14f; setPadding(0, dp(28), 0, dp(10)) })
+        content.addView(label("Choose a PDF or photo", 28, ink))
+        content.addView(label("It is copied into Kaagaz's private storage and read on this device.", 15, muted).apply { setPadding(0, dp(10), 0, dp(20)) })
+        content.addView(actionButton("Open the file picker", true) { launchPicker() })
+        setContentView(scroll(content))
+    }
+
+    /** Hands control back to Mission OS, optionally opening one of its screens (ASK, CRASH). */
+    private fun finishToMission(missionScreen: String? = null) {
+        startActivity(Intent(this, MissionActivity::class.java)
+            .apply { missionScreen?.let { putExtra(MissionActivity.EXTRA_SCREEN, it) } }
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        clearSavedSession()
+        finish()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -151,10 +187,9 @@ class DocumentActivity : ComponentActivity() {
 
     private fun navigateBack() {
         when (screen) {
-            Screen.HOME -> finish()
-            Screen.LIBRARY -> showHome()
+            Screen.HOME, Screen.PICKING, Screen.LIBRARY, Screen.ERROR -> showHome()
             Screen.PREVIEW -> if (previewReturnsToLibrary) showLibrary() else showHome()
-            Screen.ERROR -> showHome()
+            Screen.DOCUMENT_SUMMARY -> currentDocument?.let(::showDocumentPreview) ?: showHome()
             Screen.OCR_LOADING -> {
                 cancelOcr(silent = true)
                 currentDocument?.let(::showDocumentPreview) ?: showHome()
@@ -169,42 +204,14 @@ class DocumentActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Mission control is the app's only home. This screen used to have its own home page; every path that led
+     * there ("back" from the library, an error, a cancelled pick, a deletion) now returns to Mission OS instead.
+     */
     private fun showHome() {
-        screen = Screen.HOME
-        currentDocument = null
-        currentOcr = emptyList()
-        currentInsurance = emptyList()
-        previewReturnsToLibrary = false
-        currentEvidenceKey = null
-        currentEvidencePage = null
-        currentQaQuestion = null
-        currentCoverageQuestion = null
-        currentCoveragePassage = null
-        evidenceReturnsToQa = false
+        cancelOcr(silent = true)
         clearSavedSession()
-        setContentView(buildHome())
-    }
-
-    private fun buildHome(): View {
-        val content = page()
-        content.addView(label("KAAGAZ", 14, forest).apply { letterSpacing = .18f })
-        content.addView(label("Your papers,\nunderstood.", 38, ink).apply {
-            setPadding(0, dp(12), 0, dp(10)); setLineSpacing(0f, .94f)
-        })
-        content.addView(label("A private place for the documents that matter to your family.", 17, muted).apply {
-            setLineSpacing(dp(3).toFloat(), 1f)
-        })
-        content.addView(privacyCard(), params(top = 28))
-        content.addView(actionButton("＋  Add a document", true) { launchPicker() }, params(top = 24))
-        content.addView(actionButton("View saved documents", false) {
-            showLibrary()
-        }, params(top = 12))
-        content.addView(label("YOUR DOCUMENTS", 12, muted).apply {
-            letterSpacing = .14f; setPadding(0, dp(34), 0, dp(12))
-        })
-        val savedCount = runCatching { store.listDocuments().size }.getOrDefault(0)
-        content.addView(if (savedCount == 0) emptyState() else messageCard("$savedCount saved ${if (savedCount == 1) "document" else "documents"}", "Open your private on-device library to continue."))
-        return scroll(content)
+        finish()
     }
 
     private fun launchPicker() = openDocument.launch(arrayOf("image/*", "application/pdf"))
@@ -266,7 +273,7 @@ class DocumentActivity : ComponentActivity() {
             content.addView(statusCard(if (currentOcr.isEmpty()) "Saved privately on this device. OCR has not run yet." else "Saved privately on this device with on-device OCR results."), params(top = 18))
             if (currentOcr.isEmpty()) {
                 content.addView(actionButton("Extract text on device", true) { startOcr(document) }, params(top = 18))
-            } else {
+            } else if (isInsuranceLike()) {
                 content.addView(policyCoverageSummaryCard(), params(top = 18))
                 content.addView(actionButton("Review extracted fields", true) { showInsuranceSummary() }, params(top = 18))
                 content.addView(actionButton("Understand my coverage", false) { showCoverageIntelligence() }, params(top = 12))
@@ -274,7 +281,18 @@ class DocumentActivity : ComponentActivity() {
                 content.addView(actionButton("Ask Kaagaz", false) { showAskKaagaz() }, params(top = 12))
                 content.addView(actionButton("View OCR text", false) { showOcrResults(currentOcr) }, params(top = 12))
                 content.addView(actionButton("Run OCR again", false) { startOcr(document) }, params(top = 12))
+            } else {
+                // Not an insurance document: show what it is and offer the actions that fit it.
+                val kind = currentKind()
+                content.addView(messageCard("${kind.title} · ${DocumentSummarizer.headline(kind, currentFacts())}",
+                    "${currentFacts().size} facts extracted with page evidence. They feed your Trust Ledger and Crash Test."), params(top = 18))
+                content.addView(actionButton("View ${kind.shortName()} summary", true) { showDocumentSummary() }, params(top = 18))
+                content.addView(actionButton("Ask about my documents", false) { finishToMission(MissionActivity.SCREEN_ASK) }, params(top = 12))
+                content.addView(actionButton("Run the Paperwork Crash Test", false) { finishToMission(MissionActivity.SCREEN_CRASH) }, params(top = 12))
+                content.addView(actionButton("View OCR text", false) { showOcrResults(currentOcr) }, params(top = 12))
+                content.addView(actionButton("Run OCR again", false) { startOcr(document) }, params(top = 12))
             }
+            content.addView(actionButton("Done · back to Mission control", false) { finishToMission() }, params(top = 12))
         } catch (_: Exception) {
             content.addView(messageCard("Preview unavailable", "You can return and choose a different document."))
         }
@@ -448,7 +466,9 @@ class DocumentActivity : ComponentActivity() {
         if (fullText.isBlank()) {
             content.addView(messageCard("The document appears empty", "Try a sharper image or a document with larger text."))
         } else {
-            content.addView(actionButton("View insurance summary", true) { showInsuranceSummary() })
+            if (isInsuranceLike()) content.addView(actionButton("View insurance summary", true) { showInsuranceSummary() })
+            else content.addView(actionButton("View ${currentKind().shortName()} summary", true) { showDocumentSummary() })
+            content.addView(actionButton("Done · back to Mission control", false) { finishToMission() }, params(top = 12))
             lateinit var copyButton: Button
             copyButton = actionButton("Copy text", false) {
                 copyText(fullText)
@@ -465,6 +485,78 @@ class DocumentActivity : ComponentActivity() {
         content.addView(label("OCR output is unverified. Check it against the original document.", 13, muted).apply {
             setPadding(0, dp(20), 0, 0)
         })
+        setContentView(scroll(content))
+    }
+
+    // ---- type-aware summary for documents that are not insurance ----------------------------------------------
+
+    private fun currentKind(): DocKind = FactExtractor.classify(currentOcr)
+
+    private fun currentFacts(): List<Fact> {
+        val document = currentDocument ?: return emptyList()
+        return FactExtractor.extract(document.id, document.name, currentOcr, currentInsurance)
+    }
+
+    /** Insurance screens only for policies and premium statements (or documents with clear policy signals). */
+    private fun isInsuranceLike(): Boolean {
+        if (currentOcr.isEmpty()) return false
+        return when (currentKind()) {
+            DocKind.INSURANCE_POLICY, DocKind.PAYMENT_STATEMENT -> true
+            DocKind.OTHER -> DocumentProfile.detect(currentOcr) in setOf(DocumentKind.MOTOR_INSURANCE, DocumentKind.HEALTH_INSURANCE, DocumentKind.LIFE_SAVINGS, DocumentKind.PAYMENT_STATEMENT)
+            else -> false
+        }
+    }
+
+    private fun DocKind.shortName() = when (this) {
+        DocKind.RESUME -> "résumé"; DocKind.EDUCATION_CERTIFICATE -> "certificate"; DocKind.TRANSCRIPT -> "transcript"
+        DocKind.BILL -> "bill"; DocKind.PAYMENT_STATEMENT -> "statement"; DocKind.INSURANCE_POLICY -> "policy"; DocKind.OTHER -> "document"
+    }
+
+    private fun showDocumentSummary() {
+        val document = currentDocument ?: return showHome()
+        screen = Screen.DOCUMENT_SUMMARY
+        saveSession()
+        val kind = currentKind(); val facts = currentFacts()
+        val content = page()
+        content.addView(textButton("←  Back to document") { showDocumentPreview(document) })
+        content.addView(label(kind.title.uppercase(), 12, forest).apply { letterSpacing = .14f; setPadding(0, dp(28), 0, dp(10)) })
+        content.addView(label(DocumentSummarizer.headline(kind, facts), 26, ink))
+        content.addView(label("${document.name} · ${currentOcr.size} page${if (currentOcr.size == 1) "" else "s"} read on this device", 14, muted).apply { setPadding(0, dp(8), 0, dp(18)) })
+
+        content.addView(label("AT A GLANCE", 12, muted).apply { letterSpacing = .14f; setPadding(0, dp(6), 0, dp(10)) })
+        val rows = DocumentSummarizer.glance(kind, facts)
+        if (rows.isEmpty()) content.addView(messageCard("No labelled facts found", "Kaagaz only extracts values that are explicitly labelled on the page. The full text is still searchable from Ask."))
+        rows.forEach { row ->
+            content.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(14), dp(18), dp(14))
+                background = rounded(Color.rgb(18, 24, 30), 16, Color.rgb(36, 46, 54))
+                addView(label(row.label.uppercase(), 11, muted).apply { letterSpacing = .1f })
+                addView(label(row.value, 18, ink).apply { setPadding(0, dp(6), 0, dp(6)) })
+                addView(label("Page ${row.page} · “${row.evidence.take(120)}”", 12, muted))
+            }, params(top = 8))
+        }
+
+        val narrativeBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val gemma = Services.gemma(this)
+        content.addView(label("IN PLAIN WORDS", 12, muted).apply { letterSpacing = .14f; setPadding(0, dp(22), 0, dp(10)) })
+        if (gemma.isReady) {
+            content.addView(actionButton("Summarise with Gemma (on device)", true) {
+                narrativeBox.removeAllViews(); narrativeBox.addView(statusCard("Gemma is reading this document on device…"))
+                worker.execute {
+                    val n = runCatching { DocumentSummarizer.narrative(kind, currentOcr, gemma) }.getOrElse { DocumentSummarizer.Narrative(null, "error", "Summary failed: ${it.message}") }
+                    runOnUiThread {
+                        if (screen != Screen.DOCUMENT_SUMMARY) return@runOnUiThread
+                        narrativeBox.removeAllViews()
+                        narrativeBox.addView(messageCard(n.text ?: "No summary shown", n.note))
+                    }
+                }
+            })
+        } else content.addView(messageCard("Gemma is not loaded", "Import and verify a Gemma model under Privacy & model to get a plain-language summary. The facts above are extracted without a language model."))
+        content.addView(narrativeBox, params(top = 10))
+
+        content.addView(actionButton("Ask about my documents", false) { finishToMission(MissionActivity.SCREEN_ASK) }, params(top = 18))
+        content.addView(actionButton("Run the Paperwork Crash Test", false) { finishToMission(MissionActivity.SCREEN_CRASH) }, params(top = 12))
+        content.addView(actionButton("Done · back to Mission control", false) { finishToMission() }, params(top = 12))
         setContentView(scroll(content))
     }
 
@@ -1145,7 +1237,7 @@ class DocumentActivity : ComponentActivity() {
         addView(label(type, 13, muted).apply { setPadding(0, dp(7), 0, 0) })
         val summary = listOfNotNull(
             item.policyNumber?.let { "Policy $it" }, item.insuredName, item.expiryDate?.let { "Expires $it" }
-        ).joinToString(" · ").ifBlank { "OCR summary not created yet" }
+        ).joinToString(" · ").ifBlank { "Open to see its summary" }
         addView(label(summary, 14, if (item.fileAvailable) forest else Color.rgb(255, 120, 104)).apply {
             setPadding(0, dp(9), 0, 0); maxLines = 2
         })
@@ -1193,7 +1285,7 @@ class DocumentActivity : ComponentActivity() {
                 currentDocument = null; currentOcr = emptyList(); currentInsurance = emptyList(); clearSavedSession()
             }
             Toast.makeText(this, "Document deleted", Toast.LENGTH_SHORT).show()
-            showLibrary()
+            if (launchedFor == LAUNCH_LIBRARY || previewReturnsToLibrary) showLibrary() else showHome()
         } catch (_: Exception) {
             Toast.makeText(this, "Document could not be deleted safely", Toast.LENGTH_LONG).show()
         }
@@ -1312,7 +1404,8 @@ class DocumentActivity : ComponentActivity() {
             ?: preferences.getBoolean(STATE_EVIDENCE_RETURNS_QA, false)
         when (target) {
             Screen.OCR_RESULTS -> showOcrResults(currentOcr)
-            Screen.INSURANCE_SUMMARY -> showInsuranceSummary()
+            Screen.DOCUMENT_SUMMARY -> showDocumentSummary()
+            Screen.INSURANCE_SUMMARY -> if (isInsuranceLike()) showInsuranceSummary() else showDocumentSummary()
             Screen.QA -> showAskKaagaz()
             Screen.COVERAGE -> showCoverageIntelligence()
             Screen.COVERAGE_EVIDENCE -> {
@@ -1484,12 +1577,15 @@ class DocumentActivity : ComponentActivity() {
         val cancelled: AtomicBoolean = AtomicBoolean(false),
         val closed: AtomicBoolean = AtomicBoolean(false)
     )
-    private enum class Screen { HOME, LIBRARY, PREVIEW, OCR_LOADING, OCR_RESULTS, INSURANCE_SUMMARY, QA, COVERAGE, FIELD_EVIDENCE, COVERAGE_EVIDENCE, REMINDER, ERROR }
+    private enum class Screen { HOME, PICKING, DOCUMENT_SUMMARY, LIBRARY, PREVIEW, OCR_LOADING, OCR_RESULTS, INSURANCE_SUMMARY, QA, COVERAGE, FIELD_EVIDENCE, COVERAGE_EVIDENCE, REMINDER, ERROR }
 
     companion object {
         const val EXTRA_OPEN_DOCUMENT = "com.kaagaz.app.OPEN_DOCUMENT"
         const val EXTRA_PICK_DOCUMENT = "com.kaagaz.app.PICK_DOCUMENT"
         const val EXTRA_LIBRARY = "com.kaagaz.app.LIBRARY"
+        private const val LAUNCH_OPEN = "open"
+        private const val LAUNCH_PICK = "pick"
+        private const val LAUNCH_LIBRARY = "library"
         private const val MAX_PDF_PAGES = 10
         private const val OCR_RENDER_WIDTH = 1800
         private const val PROGRESS_TAG = "ocr_progress"
