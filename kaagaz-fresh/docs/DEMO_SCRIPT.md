@@ -1,0 +1,23 @@
+# 3-minute demo script
+
+**Setup (before judges arrive):**
+1. Install the APK.
+2. Import Gemma under **Privacy & model** and wait for **GEMMA · GPU** on the home screen.
+3. Tap **Install demo pack**, or use a library that already has it.
+4. Optional: turn on **airplane mode**. Everything below works offline.
+
+| Time | Do | Say |
+|---|---|---|
+| 0:00 | Home screen | "Kaagaz is an on-device paperwork agent. No internet permission at all; Gemma runs on this phone's GPU. Today's Brief already shows two conflicting records, a duplicate bill and a payment due in 9 days." |
+| 0:20 | Open the **Trust Ledger** | "Every fact carries its document, page and the exact OCR line. The red edges are the planted conflicts: graduation year 2023 vs 2024, and date of birth March vs May. Kaagaz never silently picks one." |
+| 0:45 | **Ask:** "What is my graduation year?" | "It refuses to guess and shows both sources." |
+| 0:55 | **Ask:** "What happens if the policyholder dies?" | "This is Gemma: a grounded answer in under a second, with a citation." |
+| 1:05 | **Ask:** "How many units were consumed?" | "Watch this one. Gemma said 12; the bill says 312. Every number must appear in the cited evidence, so Kaagaz rejected it and showed the exact line. That's proof-carrying AI." |
+| 1:30 | **Audit documents → Run crash test** | "The Paperwork Crash Test, computed from the documents and not scripted: conflicts, a duplicate bill, a deadline, and two over-reaching fields on the form. A net-banking password and a full Aadhaar number are flagged for review and never filled." |
+| 2:00 | **Start a Mission:** "Prepare my university application and show me what is missing" | "Gemma plans from a whitelist; Kotlin executes. Everything stops at approval. I'll approve only the form fill." Approve one step. "It filled 8 verified fields, verified them by read-back, and submitted nothing. The rejected steps say 'nothing was changed'." |
+| 2:30 | **Prepare form → Export Proof Pack** | "A portable report: every value, its citation, and a SHA-256 fingerprint of each source file, so anyone can check the evidence came from these exact documents." |
+| 2:50 | Share a PDF from Files to **Kaagaz: read privately** (optional) | "It works from any app's share sheet, and the camera too. One on-device pipeline." |
+
+**If something goes wrong:**
+- **Gemma not loaded:** answers are labelled "Policy engine" or "Best matching passage · no LLM". Say so; every other feature still works.
+- **Demo documents missing:** use **Install demo pack** on the home screen. It takes about 10 seconds.

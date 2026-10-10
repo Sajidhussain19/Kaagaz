@@ -85,6 +85,7 @@ class MissionActivity : ComponentActivity() {
     private var crashWithForm = true
     private var crashResults: List<Finding>? = null
     private var crashBusy = false
+    private var crashPickerOpen = false
     private var mission: MissionRunner? = null
     private var missionId: String? = null
     private var missionBusy = false
@@ -628,8 +629,14 @@ class MissionActivity : ComponentActivity() {
         val selection = crashSelection ?: s.documents.filter { it.kind != DocKind.INSURANCE_POLICY }.map { it.id }
             .ifEmpty { s.documents.map { it.id } }.toMutableSet().also { crashSelection = it }
         val pick = ui.card()
-        pick.addView(ui.eyebrow("Documents in this test · ${selection.size}/${s.documents.size}", Palette.muted))
-        s.documents.forEach { d ->
+        val header = ui.row()
+        header.addView(ui.eyebrow("Documents in this test · ${selection.size}/${s.documents.size}", Palette.muted), ui.weight())
+        header.addView(ui.link(if (crashPickerOpen) "Done" else "Change") { crashPickerOpen = !crashPickerOpen; render() })
+        pick.addView(header)
+        if (!crashPickerOpen) {
+            val kinds = s.documents.filter { it.id in selection }.groupingBy { it.kind.title }.eachCount()
+            pick.addView(ui.text(kinds.entries.joinToString(" · ") { "${it.value} ${it.key.lowercase()}" }.ifEmpty { "No documents selected" }, 13f, Palette.ink), ui.lp(4))
+        } else s.documents.forEach { d ->
             pick.addView(CheckBox(this).apply {
                 text = "${d.name}  ·  ${d.kind.title}"; setTextColor(Palette.ink); textSize = 13.5f; isChecked = d.id in selection
                 buttonTintList = android.content.res.ColorStateList.valueOf(Palette.mint)
