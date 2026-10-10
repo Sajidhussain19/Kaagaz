@@ -28,6 +28,10 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.kaagaz.app.audit.CrashTest
+import com.kaagaz.app.brief.DailyBrief
+import com.kaagaz.app.ocr.DemoPack
+import com.kaagaz.app.ocr.DocumentIngestor
+import com.kaagaz.app.proof.ProofPackExporter
 import com.kaagaz.app.audit.EvidenceRef
 import com.kaagaz.app.audit.Finding
 import com.kaagaz.app.audit.FindingKind
@@ -87,8 +91,17 @@ class MissionActivity : ComponentActivity() {
     private var formSpec: FormSpec = FormLibrary.universityApplication
     private var modelBusyText: String? = null
     private var pendingApproval: Set<MissionAction>? = null
+    private var brief: List<DailyBrief.Item> = emptyList()
+    private var demoMissing: List<String> = emptyList()
+    private var intakeStatus: String? = null
+    private var cameraFile: java.io.File? = null
 
     private val importModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(::copyModel) }
+    private val takePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val file = cameraFile ?: return@registerForActivityResult
+        if (saved && file.length() > 0) ingest(listOf(Uri.fromFile(file) to "scan-${LocalTime.now().withNano(0).toString().replace(':', '-')}.jpg")) { file.delete() }
+        else { file.delete(); toast("Scan cancelled") }
+    }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
         pendingApproval?.let { approved -> pendingApproval = null; executeApproved(approved) }
     }
@@ -113,7 +126,91 @@ class MissionActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() { if (screen == Screen.HOME) finish() else go(Screen.HOME) }
         })
+        if (savedInstanceState == null) handleIncoming(intent)
     }
+
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleIncoming(intent) }
+
+    /** "Share to Kaagaz" / "Open with Kaagaz" from any app: PDFs and images go through the same on-device pipeline. */
+    private fun handleIncoming(intent: Intent?) {
+        intent ?: return
+        val uris: List<Uri> = when (intent.action) {
+            Intent.ACTION_SEND -> listOfNotNull(intent.parcelableUri(Intent.EXTRA_STREAM))
+            Intent.ACTION_SEND_MULTIPLE -> intent.parcelableUris(Intent.EXTRA_STREAM)
+            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
+            else -> emptyList()
+        }
+        if (uris.isEmpty()) return
+        intent.action = null // handle once, even across recreation
+        screen = Screen.HOME
+        ingest(uris.take(10).map { it to null }, intent.type)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun Intent.parcelableUri(key: String): Uri? = if (Build.VERSION.SDK_INT >= 33) getParcelableExtra(key, Uri::class.java) else getParcelableExtra(key)
+
+    @Suppress("DEPRECATION")
+    private fun Intent.parcelableUris(key: String): List<Uri> = (if (Build.VERSION.SDK_INT >= 33) getParcelableArrayListExtra(key, Uri::class.java) else getParcelableArrayListExtra(key)).orEmpty()
+
+    private fun ingest(items: List<Pair<Uri, String?>>, mimeHint: String? = null, after: () -> Unit = {}) {
+        if (intakeStatus != null) return toast("Already reading a document…")
+        intakeStatus = "Preparing ${items.size} document${if (items.size == 1) "" else "s"}…"; render()
+        val ingestor = DocumentIngestor(applicationContext, store)
+        bg({
+            items.mapIndexed { i, (uri, name) ->
+                runCatching { ingestor.ingest(uri, name, mimeHint) { msg -> runOnUiThread { intakeStatus = if (items.size > 1) "${i + 1}/${items.size} · $msg" else msg; if (screen == Screen.HOME) render() } } }
+            }
+        }) { r ->
+            after(); intakeStatus = null
+            val results = r.getOrDefault(emptyList())
+            val ok = results.mapNotNull { it.getOrNull() }; val failed = results.count { it.isFailure }
+            // Log only the failure type, never document contents.
+            results.mapNotNull { it.exceptionOrNull() }.forEach { android.util.Log.w("Kaagaz", "intake failed: ${it.javaClass.simpleName}: ${it.message?.take(120)}") }
+            r.exceptionOrNull()?.let { android.util.Log.w("Kaagaz", "intake crashed: ${it.javaClass.simpleName}: ${it.message?.take(120)}") }
+            toast(when { ok.isEmpty() -> "Could not read ${if (failed == 1) "this document" else "these documents"}"
+                ok.size == 1 -> "Read ${ok[0].name}: ${ok[0].pages} page(s), ${ok[0].lines} lines" + if (failed > 0) " · $failed failed" else ""
+                else -> "Read ${ok.size} documents" + if (failed > 0) " · $failed failed" else "" })
+            crashResults = null; knowledge.invalidate(); snap = null; refresh()
+        }
+    }
+
+    private fun startCameraScan() {
+        val file = java.io.File(cacheDir, "camera").apply { mkdirs() }.resolve("capture-${System.currentTimeMillis()}.jpg")
+        cameraFile = file
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+        runCatching { takePicture.launch(uri) }.onFailure { toast("No camera app available") }
+    }
+
+    private fun installDemoPack() {
+        if (intakeStatus != null) return
+        intakeStatus = "Installing fictional demo pack…"; render()
+        bg({ DemoPack.install(applicationContext, store) { msg -> runOnUiThread { intakeStatus = msg; if (screen == Screen.HOME) render() } } }) { r ->
+            intakeStatus = null
+            r.onSuccess { toast("Demo pack ready: $it documents read on device") }.onFailure { toast("Demo pack failed: ${it.message}") }
+            crashResults = null; knowledge.invalidate(); snap = null; refresh()
+        }
+    }
+
+    private fun exportProofPack() {
+        val s = snap ?: return toast("Still reading documents…")
+        toast("Building Proof Pack…")
+        bg({
+            val ledger = TrustLedger.build(s.facts, s.kinds, formSpec.fields.mapNotNull { it.type }.toSet() + knowledge.profileRequired, knowledge.resolutions())
+            val states = knowledge.findingStates()
+            val form = formSpec.takeIf { it.id == FormLibrary.universityApplication.id }
+            val findings = CrashTest.run(s.documents.filter { it.kind != DocKind.INSURANCE_POLICY }, s.facts, ledger, form).filter { states[it.id] == null }
+            ProofPackExporter(applicationContext, store).export(ProofPackExporter.Input(s.copy(ledger = ledger), formSpec, FormMapper.map(formSpec, ledger), findings, modelLine()))
+        }) { r ->
+            r.onSuccess { file ->
+                val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+                val send = Intent(Intent.ACTION_SEND).setType("application/pdf").putExtra(Intent.EXTRA_STREAM, uri)
+                    .putExtra(Intent.EXTRA_SUBJECT, "Kaagaz Proof Pack").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                startActivity(Intent.createChooser(send, "Share Proof Pack (leaves this device only if you choose)"))
+            }.onFailure { toast("Proof Pack failed: ${it.message}") }
+        }
+    }
+
+    private fun modelLine() = if (gemma.isReady) "Gemma ${gemma.label} on ${gemma.state.backend}" else "no language model (deterministic engine)"
 
     override fun onResume() {
         super.onResume()
@@ -130,7 +227,15 @@ class MissionActivity : ComponentActivity() {
 
     private fun refresh() {
         if (snap == null) render()
-        bg({ knowledge.snapshot() }) { r -> r.onSuccess { snap = it }.onFailure { toast("Could not read saved documents: ${it.message}") }; render() }
+        bg({
+            val s = knowledge.snapshot()
+            val states = knowledge.findingStates()
+            val findings = runCatching { CrashTest.run(s.documents.filter { it.kind != DocKind.INSURANCE_POLICY }, s.facts, s.ledger).filter { states[it.id] == null } }.getOrDefault(emptyList())
+            Triple(s, DailyBrief.build(s.ledger, s.facts, findings), DemoPack.missing(store))
+        }) { r ->
+            r.onSuccess { (s, b, d) -> snap = s; brief = b; demoMissing = d }.onFailure { toast("Could not read saved documents: ${it.message}") }
+            render()
+        }
     }
 
     private fun go(target: Screen) { screen = target; render() }
@@ -183,6 +288,55 @@ class MissionActivity : ComponentActivity() {
         privacy.addView(ui.chip("${s?.summaries?.size ?: 0} DOCS", Palette.blue), ui.weight(0f, 8).apply { width = -2 })
         content.addView(privacy, ui.lp(14))
 
+        intakeStatus?.let { status ->
+            val card = ui.card(Palette.blue, Palette.raised)
+            val r = ui.row()
+            r.addView(PulseView(this, Palette.blue), LinearLayout.LayoutParams(ui.dp(30), ui.dp(30)))
+            val col = ui.column()
+            col.addView(ui.eyebrow("On-device intake", Palette.blue))
+            col.addView(ui.text(status, 14f, Palette.ink), ui.lp(4))
+            r.addView(col, ui.weight(1f, 12))
+            card.addView(r)
+            content.addView(card, ui.lp(14))
+        }
+
+        // Today's brief
+        if (s != null && brief.isNotEmpty()) {
+            val card = ui.card(if (brief.any { it.tone == DailyBrief.Tone.URGENT }) Palette.amber else Palette.mint)
+            card.addView(ui.eyebrow("Today's brief", Palette.amber))
+            brief.forEach { item ->
+                val color = when (item.tone) { DailyBrief.Tone.URGENT -> Palette.red; DailyBrief.Tone.ATTENTION -> Palette.amber; DailyBrief.Tone.INFO -> Palette.blue; DailyBrief.Tone.GOOD -> Palette.mint }
+                val r = ui.row().apply { setPadding(0, ui.dp(10), 0, 0) }
+                r.addView(ui.text("●", 13f, color))
+                val col = ui.column()
+                col.addView(ui.text(item.title, 15.5f, Palette.ink, bold = true))
+                col.addView(ui.text(item.detail, 12.5f, Palette.muted), ui.lp(2))
+                r.addView(col, ui.weight(1f, 10))
+                r.addView(ui.text("›", 20f, Palette.faint))
+                r.setOnClickListener {
+                    when (item.target) {
+                        DailyBrief.Target.LEDGER -> go(Screen.LEDGER)
+                        DailyBrief.Target.CRASH_TEST -> { crashResults = null; go(Screen.CRASH) }
+                        DailyBrief.Target.FORM -> go(Screen.FORM)
+                        DailyBrief.Target.DOCUMENT -> item.documentId?.let(::openDocument)
+                    }
+                }
+                card.addView(r)
+            }
+            content.addView(card, ui.lp(16))
+        }
+
+        if (s != null && demoMissing.isNotEmpty() && intakeStatus == null) {
+            val card = ui.card(Palette.violet)
+            card.addView(ui.eyebrow("Try it in 30 seconds", Palette.violet))
+            card.addView(ui.text("Load the fictional demo pack", 17f, Palette.ink, bold = true), ui.lp(6))
+            val what = if (demoMissing.size == DemoPack.files.size) "${demoMissing.size} clearly labelled fictional documents with planted contradictions and a duplicate bill."
+                else "${demoMissing.size} of ${DemoPack.files.size} fictional demo document${if (demoMissing.size == 1) " is" else "s are"} missing from your library."
+            card.addView(ui.text("$what They are read by the real on-device OCR pipeline; nothing is pre-computed.", 12.5f, Palette.muted), ui.lp(6))
+            card.addView(ui.ghost("Install demo pack", Palette.violet) { installDemoPack() }, ui.lp(10))
+            content.addView(card, ui.lp(14))
+        }
+
         // Start a mission
         val missionCard = ui.card(Palette.mint, Palette.raised)
         missionCard.addView(ui.eyebrow("Mission mode"))
@@ -214,9 +368,11 @@ class MissionActivity : ComponentActivity() {
         val grid = GridLayout(this).apply { columnCount = 2 }
         listOf(
             Triple("Ask Kaagaz", "Grounded answers with page evidence", Palette.mint) to { go(Screen.ASK) },
-            Triple("Scan document", "Import a PDF or photo, OCR on device", Palette.blue) to { startActivity(Intent(this, DocumentActivity::class.java).putExtra(DocumentActivity.EXTRA_PICK_DOCUMENT, true)) },
+            Triple("Camera scan", "Photograph a paper, OCR on device", Palette.blue) to { startCameraScan() },
+            Triple("Import file", "PDF or image from your phone", Palette.blue) to { startActivity(Intent(this, DocumentActivity::class.java).putExtra(DocumentActivity.EXTRA_PICK_DOCUMENT, true)) },
             Triple("Prepare form", "Field-by-field with sources", Palette.lime) to { go(Screen.FORM) },
-            Triple("Audit documents", "Run the Paperwork Crash Test", Palette.amber) to { go(Screen.CRASH) }
+            Triple("Audit documents", "Run the Paperwork Crash Test", Palette.amber) to { crashResults = null; go(Screen.CRASH) },
+            Triple("Proof Pack", "Export cited, fingerprinted PDF", Palette.violet) to { exportProofPack() }
         ).forEachIndexed { i, (meta, action) ->
             val tile = ui.column(14, 14).apply { background = ui.rounded(Palette.surface, 20, Palette.line); minimumHeight = ui.dp(112); setOnClickListener { action() } }
             tile.addView(ui.text("◆", 18f, meta.third))
@@ -730,6 +886,7 @@ class MissionActivity : ComponentActivity() {
                 knowledge.saveFormValue(formSpec.id, "__saved__", System.currentTimeMillis().toString(), "packet"); toast("Saved locally. Not submitted."); render()
             }
         }, ui.lp(10))
+        content.addView(ui.ghost("Export Proof Pack (PDF with citations)", Palette.violet) { exportProofPack() }, ui.lp(10))
         content.addView(ui.ghost("Run crash test on this form", Palette.amber) { crashWithForm = formSpec.id == FormLibrary.universityApplication.id; crashResults = null; go(Screen.CRASH) }, ui.lp(10))
         content.addView(ui.ghost("Clear form values", Palette.muted) { confirm("Clear this form?", "Removes saved values for this form only.") { knowledge.clearForm(formSpec.id); render() } }, ui.lp(10))
 

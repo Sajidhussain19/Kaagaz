@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only these private cache folders can ever be shared through the FileProvider. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+    <cache-path name="proof" path="proof/" />
+</paths>
