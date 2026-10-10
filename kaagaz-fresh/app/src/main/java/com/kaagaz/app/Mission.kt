@@ -38,16 +38,40 @@ data class ToolResult(val ok: Boolean, val summary: String, val evidence: List<E
 object MissionPlanner {
     private val formIds = setOf(FormLibrary.universityApplication.id)
 
-    fun systemPrompt(): String = "You plan paperwork missions. Reply with JSON only, no prose: " +
-        "{\"steps\":[{\"action\":\"ACTION\",\"args\":{}}]}. Allowed actions: " + MissionAction.values().joinToString { it.name } +
-        ". Use args {\"query\":\"...\"} for SEARCH_DOCUMENTS, {\"form\":\"uni-app\"} for PREPARE_FORM/FILL_FORM/RUN_CRASH_TEST, " +
-        "{\"target\":\"bill\"} for SCHEDULE_REMINDER. At most 7 steps."
+    fun systemPrompt(): String = "You plan paperwork missions by choosing steps from a fixed list. " +
+        "Reply with only the step names, one per line, in order, at most 7. Allowed steps:\n" +
+        MissionAction.values().joinToString("\n") { "${it.name} - ${it.title}" } +
+        "\nExample for 'remind me about my bill':\nSEARCH_DOCUMENTS\nBUILD_LEDGER\nRUN_CRASH_TEST\nSCHEDULE_REMINDER"
 
-    fun plan(goal: String, llm: LlmClient): MissionPlan {
+    /** One allowed action name per line (what small models produce reliably). Unknown lines are ignored. */
+    fun parseLines(raw: String, goal: String): List<MissionStep>? {
+        val names = MissionAction.values().associateBy { it.name }
+        val actions = raw.lines().mapNotNull { line ->
+            Regex("[A-Z][A-Z_]{3,}").findAll(line.uppercase(Locale.ENGLISH)).map { it.value }.firstOrNull { it in names }?.let { names[it] }
+        }.distinct().take(7)
+        if (actions.isEmpty()) return null
+        return actions.map { action ->
+            MissionStep(action, when (action) {
+                MissionAction.SEARCH_DOCUMENTS -> mapOf("query" to goal.take(80))
+                MissionAction.PREPARE_FORM, MissionAction.FILL_FORM -> mapOf("form" to FormLibrary.universityApplication.id)
+                MissionAction.RUN_CRASH_TEST -> if (listOf("application", "form", "apply").any { it in goal.lowercase(Locale.ENGLISH) }) mapOf("form" to FormLibrary.universityApplication.id) else emptyMap()
+                MissionAction.SCHEDULE_REMINDER -> mapOf("target" to "bill")
+                else -> emptyMap()
+            })
+        }
+    }
+
+    fun plan(goal: String, llm: LlmClient): MissionPlan = try { planWith(goal, llm) } catch (e: Exception) {
+        deterministic(goal).copy(plannerNote = "Model planning failed (${e.javaClass.simpleName}); rule-based planner used.")
+    }
+
+    private fun planWith(goal: String, llm: LlmClient): MissionPlan {
         if (llm.isReady) {
             when (val r = llm.generate("Goal: $goal", systemPrompt(), maxTokens = 220, timeoutMs = 40_000)) {
-                is LlmResult.Text -> parse(r.text)?.let { steps -> return MissionPlan(goal, enforce(goal, steps), "${llm.label} (validated)", "Plan proposed by Gemma in ${r.latencyMs} ms and checked against the action whitelist.") }
-                    ?: return deterministic(goal).copy(plannerNote = "Gemma's plan was not valid JSON with allowed actions, so the rule-based planner was used.")
+                is LlmResult.Text -> (parse(r.text) ?: parseLines(r.text, goal))?.let { steps ->
+                    return MissionPlan(goal, enforce(goal, steps), "${llm.label} (validated)",
+                        "Gemma chose ${steps.size} step${if (steps.size == 1) "" else "s"} in ${r.latencyMs} ms; every step was checked against the action whitelist and safety steps were enforced.")
+                } ?: return deterministic(goal).copy(plannerNote = "Gemma's reply contained no allowed step names (“${r.text.take(60).replace('\n', ' ')}…”), so the rule-based planner was used.")
                 is LlmResult.Failed -> return deterministic(goal).copy(plannerNote = "Gemma failed (${r.reason}); rule-based planner used.")
                 is LlmResult.Unavailable -> Unit
             }
@@ -56,16 +80,24 @@ object MissionPlanner {
     }
 
     /** Strict parser: unknown actions, malformed args, or more than 7 steps invalidate the step or the plan. */
-    fun parse(raw: String): List<MissionStep>? {
+    fun parse(raw: String): List<MissionStep>? = runCatching { parseStrict(raw) }.getOrNull()
+
+    /** Any shape surprise from the model (args as a string, steps as an object, …) throws and invalidates the plan. */
+    private fun parseStrict(raw: String): List<MissionStep>? {
         val json = Regex("\\{[\\s\\S]*}").find(raw)?.value ?: return null
-        val obj = runCatching { com.google.gson.JsonParser.parseString(json).asJsonObject }.getOrNull() ?: return null
-        val array = obj.getAsJsonArray("steps") ?: return null
+        // Gson is lenient; a reply truncated at the token limit must not pass as a shorter plan.
+        if (json.count { it == '{' } != json.count { it == '}' } || json.count { it == '[' } != json.count { it == ']' }) return null
+        val obj = com.google.gson.JsonParser.parseString(json).asJsonObject
+        val array = obj.get("steps")?.takeIf { it.isJsonArray }?.asJsonArray ?: return null
         if (array.size() == 0 || array.size() > 7) return null
         val steps = array.mapNotNull { element ->
-            val o = runCatching { element.asJsonObject }.getOrNull() ?: return@mapNotNull null
-            val action = runCatching { MissionAction.valueOf(o.get("action").asString.trim().uppercase(Locale.ENGLISH)) }.getOrNull() ?: return@mapNotNull null
-            val args = o.getAsJsonObject("args")?.entrySet()?.associate { (k, v) -> k to (runCatching { v.asString }.getOrNull() ?: "") }.orEmpty()
-                .filterKeys { it in setOf("query", "form", "target") }.mapValues { it.value.take(80) }
+            val o = element.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            val actionElement = o.get("action")?.takeIf { it.isJsonPrimitive } ?: return@mapNotNull null
+            val action = runCatching { MissionAction.valueOf(actionElement.asString.trim().uppercase(Locale.ENGLISH)) }.getOrNull() ?: return@mapNotNull null
+            val argsElement = o.get("args")
+            val args = (if (argsElement != null && argsElement.isJsonObject) argsElement.asJsonObject.entrySet().associate { (k, v) ->
+                k to (if (v.isJsonPrimitive) v.asString else "")
+            } else emptyMap()).filterKeys { it in setOf("query", "form", "target") }.mapValues { it.value.take(80) }
             if (args["form"] != null && args["form"] !in formIds) return@mapNotNull null
             MissionStep(action, args)
         }

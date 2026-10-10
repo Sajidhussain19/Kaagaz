@@ -73,6 +73,9 @@ class MissionActivity : ComponentActivity() {
         store = KaagazStore(applicationContext)
         knowledge = KnowledgeService(applicationContext, store)
         gemma = Services.gemma(this)
+        // Auto-load an imported model in the background. The runtime's crash marker turns a model that killed the
+        // app last time into FAILED, so this can never loop.
+        if (gemma.state.status == GemmaRuntime.Status.INSTALLED) gemma.load { runOnUiThread { if (!isDestroyed) render() } }
         window.statusBarColor = Palette.ground; window.navigationBarColor = Palette.ground
         screen = savedInstanceState?.getString("screen")?.let { runCatching { Screen.valueOf(it) }.getOrNull() } ?: Screen.HOME
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -528,8 +531,10 @@ class MissionActivity : ComponentActivity() {
             runner.runAutomatic()
             knowledge.saveMission(id, runner)
             runner
-        }) { r -> missionBusy = false; r.onFailure { toast("Mission failed: ${it.message}") }; snap = null; refresh() }
+        }) { r -> missionBusy = false; missionError = r.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }; snap = null; refresh() }
     }
+
+    private var missionError: String? = null
 
     private fun executeApproved(approved: Set<MissionAction>) {
         val m = mission ?: return
@@ -552,6 +557,7 @@ class MissionActivity : ComponentActivity() {
         if (m == null) {
             if (missionBusy) loading(content, if (gemma.isReady) "Gemma is planning the mission…" else "Planning with the rule-based planner…")
             else {
+                missionError?.let { content.addView(ui.card(Palette.red).apply { addView(ui.text("The last mission stopped: $it", 13f, Palette.red)) }, ui.lp(14)) }
                 val goal = ui.input("Describe a goal", 2); content.addView(goal, ui.lp(16))
                 content.addView(ui.primary("Launch mission") { startMission(goal.text.toString()) }, ui.lp(10))
             }

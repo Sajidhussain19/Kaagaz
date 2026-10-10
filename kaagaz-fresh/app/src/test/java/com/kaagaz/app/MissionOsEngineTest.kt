@@ -265,6 +265,14 @@ class MissionOsEngineTest {
         assertEquals(mapOf("form" to "uni-app"), parsed.single().args)
     }
 
+    @Test fun plannerSurvivesMalformedModelJson() {
+        assertNull(MissionPlanner.parse("""{"steps":{"action":"BUILD_LEDGER"}}"""))
+        assertNull(MissionPlanner.parse("""{"steps":[{"action":["BUILD_LEDGER"]}]}"""))
+        assertEquals(listOf(MissionAction.BUILD_LEDGER), MissionPlanner.parse("""{"steps":[{"action":"BUILD_LEDGER","args":"none"}]}""")!!.map { it.action })
+        assertEquals(emptyMap<String, String>(), MissionPlanner.parse("""{"steps":[{"action":"SEARCH_DOCUMENTS","args":{"query":{"x":1}}}]}""")!!.single().args.filterValues { it.isNotEmpty() })
+        assertNull(MissionPlanner.parse("""{"steps":[{"action":"BUILD_LEDGER"}"""))
+    }
+
     @Test fun enforcedPlanValidatesBeforeConsequentialSteps() {
         val steps = MissionPlanner.enforce("apply", listOf(MissionStep(MissionAction.FILL_FORM, mapOf("form" to "uni-app"))))
         val order = steps.map { it.action }
@@ -317,10 +325,21 @@ class MissionOsEngineTest {
         assertFalse("crash" in tools.calls)
     }
 
+    @Test fun lineFormatPlanAcceptsOnlyWhitelistedNames() {
+        val steps = MissionPlanner.parseLines("1. SEARCH_DOCUMENTS\n2. BUILD_LEDGER\n3. DELETE_EVERYTHING\n- SCHEDULE_REMINDER", "remind me about my bill")!!
+        assertEquals(listOf(MissionAction.SEARCH_DOCUMENTS, MissionAction.BUILD_LEDGER, MissionAction.SCHEDULE_REMINDER), steps.map { it.action })
+        assertEquals(mapOf("target" to "bill"), steps.last().args)
+        assertNull(MissionPlanner.parseLines("Sure, I can help with that.", "x"))
+        val plan = MissionPlanner.plan("remind me about my bill", FakeLlm("SEARCH_DOCUMENTS\nSCHEDULE_REMINDER"))
+        assertTrue(plan.plannedBy.contains("fake-gemma"))
+        val order = plan.steps.map { it.action }
+        assertTrue(order.indexOf(MissionAction.RUN_CRASH_TEST) < order.indexOf(MissionAction.SCHEDULE_REMINDER))
+    }
+
     @Test fun plannerFallsBackWhenModelUnavailableOrInvalid() {
         assertEquals("Rule-based planner", MissionPlanner.plan("apply to university", NoLlm).plannedBy)
         val invalid = MissionPlanner.plan("apply to university", FakeLlm("I think you should apply!"))
-        assertTrue(invalid.plannerNote!!.contains("not valid"))
+        assertTrue(invalid.plannerNote!!.contains("no allowed step names"))
         val valid = MissionPlanner.plan("apply", FakeLlm("""{"steps":[{"action":"PREPARE_FORM","args":{"form":"uni-app"}}]}"""))
         assertTrue(valid.plannedBy.contains("fake-gemma"))
     }
