@@ -18,7 +18,7 @@
         <uses-native-library android:name="libvndksupport.so" android:required="false" />
 
         <activity
-            android:name=".MissionActivity"
+            android:name=".ui.MissionActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -27,7 +27,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.DocumentActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
     </application>
