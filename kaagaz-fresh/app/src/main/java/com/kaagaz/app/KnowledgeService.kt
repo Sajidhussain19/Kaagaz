@@ -180,11 +180,14 @@ class KnowledgeService(private val context: Context, private val store: KaagazSt
         override fun search(query: String): ToolResult {
             val snap = snapshot()
             if (snap.documents.isEmpty()) return ToolResult(false, "No documents with extracted text yet. Scan or import a document first.")
-            val hits = HybridRetriever(snap.chunks, snap.facts).search(query, k = 6, minBm25 = 0.5)
+            val retriever = HybridRetriever(snap.chunks, snap.facts)
+            val hits = retriever.search(query, k = 6, minBm25 = 0.5)
             val docs = hits.map { it.chunk.documentName }.distinct()
+            // Cite the single OCR line that matched best, not the page header the chunk starts with.
+            fun bestLine(h: ScoredChunk) = h.chunk.lines.maxByOrNull { l -> retriever.tokens(l.text).count { it in h.matched } }?.text ?: h.chunk.text
             return ToolResult(true, if (hits.isEmpty()) "Searched ${snap.documents.size} documents; no passage matched strongly, so all documents will be checked."
                 else "Found ${hits.size} relevant passages in ${docs.size} documents: ${docs.take(3).joinToString()}.",
-                hits.take(3).map { EvidenceRef(it.chunk.documentId, it.chunk.documentName, it.chunk.page, it.chunk.text.take(160)) })
+                hits.distinctBy { it.chunk.documentId }.take(3).map { EvidenceRef(it.chunk.documentId, it.chunk.documentName, it.chunk.page, bestLine(it).take(160)) })
         }
 
         override fun buildLedger(): ToolResult {

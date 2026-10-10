@@ -43,6 +43,22 @@ class MissionOsEngineTest {
         assertTrue(facts.any { it.documentId == "cert" && it.type == FactType.DEGREE && it.rawValue.startsWith("Bachelor of Technology") })
     }
 
+    @Test fun realOcrQuirksDoNotCreateFalseConflicts() {
+        assertEquals("aarav.mehta.demo@example.com", fact("resume", FactType.EMAIL)!!.normalized)
+        assertEquals(TrustState.VERIFIED, entry(FactType.DEGREE).state)
+        assertEquals(TrustState.VERIFIED, entry(FactType.SKILLS).state)
+        assertEquals(TrustState.VERIFIED, entry(FactType.FULL_NAME).state)
+        assertTrue(facts.none { it.type == FactType.DEGREE && it.rawValue.contains("CERTIFICATE", ignoreCase = true) })
+        assertTrue(facts.none { it.type == FactType.FULL_NAME && it.rawValue.contains("awarded") })
+    }
+
+    @Test fun onlySupportedInsuranceFieldsBecomeFacts() {
+        val reviewOnly = InsuranceField(InsuranceFieldKey.INSURED_NAME, "Statement date", emptyList(), VerificationStatus.NEEDS_REVIEW)
+        val supported = InsuranceField(InsuranceFieldKey.POLICY_NUMBER, "NDL-CHILD-2027-0042", emptyList(), VerificationStatus.SUPPORTED)
+        val out = FactExtractor.extract("p", "p.pdf", emptyList(), listOf(reviewOnly, supported))
+        assertEquals(listOf(FactType.POLICY_NUMBER), out.map { it.type })
+    }
+
     @Test fun billNamesStayDocumentScoped() {
         assertNull(fact("bill1", FactType.FULL_NAME))
         assertEquals("aarav mehta", fact("bill1", FactType.ACCOUNT_HOLDER)!!.normalized)
@@ -214,9 +230,17 @@ class MissionOsEngineTest {
         assertEquals(AnswerSource.ABSTAIN, GroundedAnswerer(FakeLlm("NOT_FOUND")).answer("When is the electricity bill due?", corpus).source)
     }
 
-    @Test fun gemmaUnavailableFallsBackToLabelledDeterministicAnswer() {
+    @Test fun gemmaUnavailableAnswersDocumentFactWithExactValueAndDuplicateNote() {
         val answer = GroundedAnswerer(NoLlm).answer("When is the electricity bill due?", corpus)
+        assertEquals(AnswerSource.FACT_LEDGER, answer.source)
+        assertEquals("Due date: 20 Oct 2026 · amount due ₹2,340.", answer.text)
+        assertTrue(answer.note!!.contains("duplicate"))
+    }
+
+    @Test fun unmappedQuestionFallsBackToBestOcrLineLabelledNoLlm() {
+        val answer = GroundedAnswerer(NoLlm).answer("How many units were consumed?", corpus)
         assertEquals(AnswerSource.EXTRACTIVE, answer.source)
+        assertEquals("“Units consumed: 312”", answer.text)
         assertTrue(answer.note!!.contains("No language model"))
     }
 

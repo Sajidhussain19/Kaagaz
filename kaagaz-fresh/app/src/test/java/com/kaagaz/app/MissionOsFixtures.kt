@@ -9,11 +9,14 @@ object MissionOsFixtures {
     fun page(number: Int, vararg lines: String) = OcrPageResult(number, lines.joinToString("\n"),
         lines.map { OcrLineEvidence(number, it, null, .95f, 1240, 1754) })
 
+    // Lines below are exactly what ML Kit returned on the test phone (Android 16), including its quirks:
+    // a space before "@", the certificate sentence wrapped mid-phrase, title lines and a bare "Skills" heading.
     val resume = listOf(page(1,
         "AARAV MEHTA - RESUME (FICTIONAL DEMO)",
+        "FICTIONAL DEMONSTRATION DOCUMENT - NOT A REAL PERSON, INSTITUTION OR BILL",
         "Full name: Aarav Mehta",
         "Date of birth: 14 March 2002",
-        "Email: aarav.mehta.demo@example.com",
+        "Email: aarav.mehta.demo @example.com",
         "Phone: +91 98765 43210",
         "Professional experience",
         "Current employer: Nimbus Labs",
@@ -23,17 +26,23 @@ object MissionOsFixtures {
         "University: Kaveri Institute of Technology",
         "Year of graduation: 2024",
         "CGPA: 8.4",
-        "Skills: Kotlin, Android, SQLite, Jetpack"
+        "Skills",
+        "Skills: Kotlin, Android, SQLite, Jetpack",
+        "FICTIONAL Kaagaz demo document - not a real person or record",
+        "Page 1"
     ))
 
     val certificate = listOf(page(1,
         "KAVERI INSTITUTE OF TECHNOLOGY (FICTIONAL)",
+        "FICTIONAL DEMONSTRATION DOCUMENT - NOT A REAL PERSON, INSTITUTION OR BILL",
         "DEGREE CERTIFICATE",
-        "This is to certify that Aarav Mehta has been awarded the degree of",
-        "Bachelor of Technology in Computer Science in the year 2023",
+        "This is to certify that Aarav Mehta has been awarded the degree of Bachelor of Technology in",
+        "Computer Science in the year 2023.",
         "Name: Aarav Mehta",
         "Year of graduation: 2023",
-        "CGPA: 8.40"
+        "CGPA: 8.40",
+        "FICTIONAL Kaagaz demo document - not a real person or record",
+        "Page 1"
     ))
 
     val transcript = listOf(page(1,

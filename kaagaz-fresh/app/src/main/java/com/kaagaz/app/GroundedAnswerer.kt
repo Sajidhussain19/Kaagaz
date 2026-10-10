@@ -79,13 +79,31 @@ class GroundedAnswerer(private val llm: LlmClient) {
 
         val top = hits.first()
         val doc = corpus.documents.firstOrNull { it.id == top.chunk.documentId }
+        // Document facts (due date, amount, premium, expiry) come from the top-ranked document's extracted fields.
+        val docType = FieldIdentifier.identify(q)?.takeIf { it.scope == FactScope.DOCUMENT }
+        if (docType != null) {
+            val fact = corpus.facts.firstOrNull { it.documentId == top.chunk.documentId && it.type == docType }
+                ?: hits.asSequence().mapNotNull { h -> corpus.facts.firstOrNull { it.documentId == h.chunk.documentId && it.type == docType } }.firstOrNull()
+            if (fact != null) {
+                val related = when (docType) {
+                    FactType.DUE_DATE -> corpus.facts.firstOrNull { it.documentId == fact.documentId && it.type == FactType.BILL_AMOUNT }
+                    FactType.BILL_AMOUNT -> corpus.facts.firstOrNull { it.documentId == fact.documentId && it.type == FactType.DUE_DATE }
+                    else -> null
+                }
+                val same = corpus.facts.filter { it.type == docType && it.normalized == fact.normalized && it.documentId != fact.documentId }.map { it.documentName }.distinct()
+                val text = "${docType.label}: ${Normalizer.display(docType, fact.normalized, fact.rawValue)}" +
+                    (related?.let { " · ${it.type.label.lowercase(Locale.ENGLISH)} ${Normalizer.display(it.type, it.normalized, it.rawValue)}" } ?: "") + "."
+                return GroundedAnswer(q, text, AnswerSource.FACT_LEDGER, listOfNotNull(fact.ref(), related?.ref()), followUpsFor(q),
+                    listOfNotNull(rejection, "From ${fact.documentName}, page ${fact.page}.", same.takeIf { it.isNotEmpty() }?.let { "The same value also appears in ${it.joinToString()} — check for a duplicate." }).joinToString(" "), hits)
+            }
+        }
         if (doc != null && CoverageIntelligenceEngine.supports(q)) {
             val coverage = CoverageIntelligenceEngine.answer(q, doc.pages, doc.insuranceFields)
             if (coverage.kind == CoverageIntelligenceEngine.AnswerKind.RESULTS) return GroundedAnswer(q, coverage.summary, AnswerSource.POLICY_ENGINE,
                 coverage.passages.take(3).map { p -> EvidenceRef(doc.id, doc.name, p.evidence.firstOrNull()?.pageNumber ?: 1, p.wording) },
                 followUpsFor(q), listOfNotNull(rejection, "From ${doc.name}.").joinToString(" "), hits)
         }
-        val sentence = bestSentence(top.chunk.text, top.matched, retriever)
+        val sentence = bestSentence(top.chunk, top.matched, retriever)
         return GroundedAnswer(q, "“${sentence.take(220)}”", AnswerSource.EXTRACTIVE, listOf(top.ref()), followUpsFor(q),
             listOfNotNull(rejection, "Quoted from ${top.chunk.documentName}, page ${top.chunk.page}. No language model wrote this.").joinToString(" "), hits)
     }
@@ -122,8 +140,12 @@ class GroundedAnswerer(private val llm: LlmClient) {
 
     private fun asksForFact(q: String) = Regex("(?i)\\b(what|which|when|who|my|tell)\\b").containsMatchIn(q)
 
-    private fun bestSentence(text: String, matched: Set<String>, retriever: HybridRetriever): String =
-        text.split(Regex("(?<=[.!?])\\s+")).maxByOrNull { s -> retriever.tokens(s).count { it in matched } } ?: text
+    /** The best sentence or OCR line: label-value schedules have no full stops, so lines are candidates too. */
+    private fun bestSentence(chunk: Chunk, matched: Set<String>, retriever: HybridRetriever): String {
+        val candidates = chunk.text.split(Regex("(?<=[.!?])\\s+")) + chunk.lines.map { it.text }
+        return candidates.filter { it.isNotBlank() }
+            .maxWithOrNull(compareBy<String> { s -> retriever.tokens(s).count { it in matched } }.thenBy { -it.length }) ?: chunk.text
+    }
 
     private fun followUps(type: FactType) = listOf("Which documents mention my ${type.label.lowercase(Locale.ENGLISH)}?", "Run the Paperwork Crash Test")
 

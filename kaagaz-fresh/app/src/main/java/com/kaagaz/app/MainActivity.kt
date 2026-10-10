@@ -44,10 +44,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
-    private val forest = Color.rgb(23, 107, 82)
-    private val ink = Color.rgb(23, 34, 30)
-    private val muted = Color.rgb(91, 105, 98)
-    private val paper = Color.rgb(247, 245, 239)
+    private val forest = Color.rgb(124, 242, 196)
+    private val ink = Color.rgb(234, 241, 237)
+    private val muted = Color.rgb(143, 160, 153)
+    private val paper = Color.rgb(9, 13, 17)
     private val worker = Executors.newSingleThreadExecutor()
 
     private var screen = Screen.HOME
@@ -87,11 +87,27 @@ class MainActivity : ComponentActivity() {
         store = KaagazStore(applicationContext)
         window.statusBarColor = paper
         window.navigationBarColor = paper
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        window.decorView.systemUiVisibility = 0
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = navigateBack()
         })
+        if (savedInstanceState == null && handleMissionIntent()) return
         if (!restoreSession(savedInstanceState)) showHome()
+    }
+
+    /** Entry points used by Mission OS: open one saved document, the library, or the document picker. */
+    private fun handleMissionIntent(): Boolean {
+        val openId = intent.getStringExtra(EXTRA_OPEN_DOCUMENT)
+        when {
+            openId != null -> {
+                val item = runCatching { store.listDocuments().firstOrNull { it.id == openId } }.getOrNull() ?: return false
+                openSavedDocument(item)
+            }
+            intent.getBooleanExtra(EXTRA_PICK_DOCUMENT, false) -> { showHome(); launchPicker() }
+            intent.getBooleanExtra(EXTRA_LIBRARY, false) -> showLibrary()
+            else -> return false
+        }
+        return true
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -476,7 +492,7 @@ class MainActivity : ComponentActivity() {
 
     private fun insuranceFieldCard(field: InsuranceField, action: () -> Unit) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(17), dp(18), dp(17))
-        background = rounded(Color.WHITE, 18, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 18, Color.rgb(36, 46, 54))
         isClickable = true; isFocusable = true; minimumHeight = dp(88)
         contentDescription = "${field.key.label}: ${field.displayedValue ?: "Not found"}. ${fieldStatusLabel(field)}"
         setOnClickListener { action() }
@@ -533,7 +549,7 @@ class MainActivity : ComponentActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             imeOptions = EditorInfo.IME_ACTION_SEND
             setSingleLine(false); maxLines = 3; minHeight = dp(58); setPadding(dp(16), dp(12), dp(16), dp(12))
-            background = rounded(Color.WHITE, 14, Color.rgb(194, 199, 195))
+            background = rounded(Color.rgb(18, 24, 30), 14, Color.rgb(70, 82, 90))
             contentDescription = "Coverage question"
         }
         fun submit() {
@@ -564,7 +580,7 @@ class MainActivity : ComponentActivity() {
 
     private fun coveragePassageCard(passage: CoverageIntelligenceEngine.Passage) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(17), dp(18), dp(17))
-        background = rounded(Color.WHITE, 18, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 18, Color.rgb(36, 46, 54))
         // The wording is one complete sentence from the document, so it is shown as written, not re-explained.
         val wording = passage.wording.trim()
         val long = wording.length > 320
@@ -669,12 +685,12 @@ class MainActivity : ComponentActivity() {
     private fun coverageCategoryColor(category: CoverageIntelligenceEngine.Category) = when (category) {
         CoverageIntelligenceEngine.Category.BENEFIT -> forest
         CoverageIntelligenceEngine.Category.CONDITIONAL, CoverageIntelligenceEngine.Category.WAITING_PERIOD,
-        CoverageIntelligenceEngine.Category.LIMIT, CoverageIntelligenceEngine.Category.MENTION_ONLY -> Color.rgb(174, 104, 24)
-        CoverageIntelligenceEngine.Category.EXCLUSION -> Color.rgb(167, 66, 54)
+        CoverageIntelligenceEngine.Category.LIMIT, CoverageIntelligenceEngine.Category.MENTION_ONLY -> Color.rgb(255, 190, 92)
+        CoverageIntelligenceEngine.Category.EXCLUSION -> Color.rgb(255, 120, 104)
         CoverageIntelligenceEngine.Category.CLAIM_REQUIREMENT, CoverageIntelligenceEngine.Category.PAYMENT_RECORD,
         CoverageIntelligenceEngine.Category.PREMIUM_SCHEDULE, CoverageIntelligenceEngine.Category.OUTSTANDING_DUE,
-        CoverageIntelligenceEngine.Category.MATURITY, CoverageIntelligenceEngine.Category.IMPORTANT_DATE -> Color.rgb(46, 94, 170)
-        CoverageIntelligenceEngine.Category.PROJECTED_BENEFIT -> Color.rgb(174, 104, 24)
+        CoverageIntelligenceEngine.Category.MATURITY, CoverageIntelligenceEngine.Category.IMPORTANT_DATE -> Color.rgb(130, 176, 255)
+        CoverageIntelligenceEngine.Category.PROJECTED_BENEFIT -> Color.rgb(255, 190, 92)
     }
 
     /** At-a-glance card: one short line per fact, each taken from a single source sentence or a supported field. */
@@ -684,7 +700,7 @@ class MainActivity : ComponentActivity() {
         val firstQuestion = DocumentProfile.suggestedQuestions(kind, currentOcr).first()
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(20))
-            background = rounded(Color.WHITE, 22, Color.rgb(224, 222, 214))
+            background = rounded(Color.rgb(18, 24, 30), 22, Color.rgb(36, 46, 54))
             addView(label(if (kind == DocumentKind.PAYMENT_STATEMENT) "YOUR PAYMENTS AT A GLANCE" else "YOUR POLICY AT A GLANCE", 11, forest).apply { letterSpacing = .08f })
             addView(label(kind.title, 13, muted).apply { setPadding(0, dp(4), 0, 0) })
             if (rows.isEmpty()) {
@@ -762,7 +778,7 @@ class MainActivity : ComponentActivity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             imeOptions = EditorInfo.IME_ACTION_SEND
             setSingleLine(true); minHeight = dp(56); setPadding(dp(16), dp(12), dp(16), dp(12))
-            background = rounded(Color.WHITE, 14, Color.rgb(194, 199, 195))
+            background = rounded(Color.rgb(18, 24, 30), 14, Color.rgb(70, 82, 90))
             contentDescription = "Question for Kaagaz"
         }
         fun submit() {
@@ -785,19 +801,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun qaBubble(text: String, user: Boolean) = TextView(this).apply {
-        this.text = text; textSize = 15f; setTextColor(if (user) Color.WHITE else ink)
+        this.text = text; textSize = 15f; setTextColor(if (user) paper else ink)
         setLineSpacing(dp(3).toFloat(), 1f); setPadding(dp(18), dp(15), dp(18), dp(15))
-        background = rounded(if (user) forest else Color.WHITE, 18, if (user) null else Color.rgb(224, 222, 214))
+        background = rounded(if (user) forest else Color.rgb(18, 24, 30), 18, if (user) null else Color.rgb(36, 46, 54))
         gravity = if (user) Gravity.END else Gravity.START
     }
 
     /** Short answer first; the source sentence and its page are one tap away on the coverage screen. */
     private fun qaCoverageAnswerCard(answer: CoverageIntelligenceEngine.Answer) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(17), dp(18), dp(17))
-        background = rounded(Color.WHITE, 18, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 18, Color.rgb(36, 46, 54))
         val (status, color) = when (answer.kind) {
             CoverageIntelligenceEngine.AnswerKind.RESULTS -> "FROM THE DOCUMENT" to forest
-            CoverageIntelligenceEngine.AnswerKind.AMBIGUOUS -> "NEEDS REVIEW" to Color.rgb(174, 104, 24)
+            CoverageIntelligenceEngine.AnswerKind.AMBIGUOUS -> "NEEDS REVIEW" to Color.rgb(255, 190, 92)
             CoverageIntelligenceEngine.AnswerKind.NOT_FOUND -> "NOT FOUND" to muted
             CoverageIntelligenceEngine.AnswerKind.UNSUPPORTED -> "QUESTION NOT SUPPORTED" to muted
         }
@@ -820,7 +836,7 @@ class MainActivity : ComponentActivity() {
 
     private fun qaAnswerCard(answer: DocumentQaEngine.Answer) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(17), dp(18), dp(17))
-        background = rounded(Color.WHITE, 18, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 18, Color.rgb(36, 46, 54))
         val status = when (answer.kind) {
             DocumentQaEngine.AnswerKind.DOCUMENT_SUPPORTED -> "SUPPORTED BY DOCUMENT TEXT"
             DocumentQaEngine.AnswerKind.NEEDS_REVIEW -> "NEEDS REVIEW"
@@ -831,8 +847,8 @@ class MainActivity : ComponentActivity() {
         }
         val color = when (answer.kind) {
             DocumentQaEngine.AnswerKind.DOCUMENT_SUPPORTED -> forest
-            DocumentQaEngine.AnswerKind.USER_CONFIRMED -> Color.rgb(46, 94, 170)
-            DocumentQaEngine.AnswerKind.NEEDS_REVIEW -> Color.rgb(174, 104, 24)
+            DocumentQaEngine.AnswerKind.USER_CONFIRMED -> Color.rgb(130, 176, 255)
+            DocumentQaEngine.AnswerKind.NEEDS_REVIEW -> Color.rgb(255, 190, 92)
             else -> muted
         }
         addView(label("●  $status", 11, color).apply { letterSpacing = .07f })
@@ -920,7 +936,7 @@ class MainActivity : ComponentActivity() {
             textSize = 16f; setTextColor(ink); setHintTextColor(muted)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             setPadding(dp(16), dp(13), dp(16), dp(13)); minHeight = dp(56)
-            background = rounded(Color.WHITE, 14, Color.rgb(194, 199, 195))
+            background = rounded(Color.rgb(18, 24, 30), 14, Color.rgb(70, 82, 90))
             contentDescription = "Edit ${field.key.label}"
         }
         content.addView(label("EDIT VALUE", 11, muted).apply { letterSpacing = .1f; setPadding(0, dp(26), 0, dp(9)) })
@@ -949,12 +965,12 @@ class MainActivity : ComponentActivity() {
             DocumentType.PDF -> renderPdfPage(document.uri, pageNumber - 1, sourceWidth)
         } ?: throw IOException("Unable to render evidence")
         evidenceBitmap = bitmap
-        val colors = intArrayOf(forest, Color.rgb(201, 112, 35), Color.rgb(46, 94, 170), Color.rgb(158, 55, 89))
+        val colors = intArrayOf(forest, Color.rgb(255, 170, 80), Color.rgb(130, 176, 255), Color.rgb(240, 120, 170))
         val highlights = evidence.mapIndexed { index, item ->
             EvidenceOverlayView.Highlight(item.boundingBox!!, item.sourceWidth, item.sourceHeight, colors[index % colors.size], index + 1)
         }
         return EvidenceOverlayView(this, bitmap, highlights).apply {
-            background = rounded(Color.WHITE, 18, Color.rgb(224, 222, 214)); setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = rounded(Color.rgb(18, 24, 30), 18, Color.rgb(36, 46, 54)); setPadding(dp(8), dp(8), dp(8), dp(8))
         }
     }
 
@@ -1005,7 +1021,7 @@ class MainActivity : ComponentActivity() {
 
     private fun evidenceCard(evidence: OcrLineEvidence) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(17), dp(18), dp(17))
-        background = rounded(Color.WHITE, 18, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 18, Color.rgb(36, 46, 54))
         addView(label("PAGE ${evidence.pageNumber}", 11, forest).apply { letterSpacing = .1f })
         addView(label(evidence.text, 17, ink).apply {
             setPadding(0, dp(10), 0, dp(10)); setTextIsSelectable(true)
@@ -1025,7 +1041,7 @@ class MainActivity : ComponentActivity() {
 
     private fun statusColor(status: VerificationStatus) = when (status) {
         VerificationStatus.SUPPORTED -> forest
-        VerificationStatus.NEEDS_REVIEW -> Color.rgb(174, 104, 24)
+        VerificationStatus.NEEDS_REVIEW -> Color.rgb(255, 190, 92)
         VerificationStatus.NOT_FOUND -> muted
     }
 
@@ -1036,8 +1052,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun fieldStatusColor(field: InsuranceField) = when {
-        field.isUserConfirmed -> Color.rgb(46, 94, 170)
-        field.isEdited -> Color.rgb(174, 104, 24)
+        field.isUserConfirmed -> Color.rgb(130, 176, 255)
+        field.isEdited -> Color.rgb(255, 190, 92)
         else -> statusColor(field.status)
     }
 
@@ -1047,7 +1063,7 @@ class MainActivity : ComponentActivity() {
         content.addView(textButton("←  Back to document") {
             currentDocument?.let(::showDocumentPreview) ?: showHome()
         })
-        content.addView(label("OCR COULDN'T FINISH", 12, Color.rgb(167, 66, 54)).apply {
+        content.addView(label("OCR COULDN'T FINISH", 12, Color.rgb(255, 120, 104)).apply {
             letterSpacing = .12f; setPadding(0, dp(30), 0, dp(12))
         })
         content.addView(label("Text extraction failed", 30, ink))
@@ -1102,7 +1118,7 @@ class MainActivity : ComponentActivity() {
 
     private fun savedDocumentCard(item: SavedDocumentSummary, action: () -> Unit) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(17), dp(18), dp(17))
-        background = rounded(Color.WHITE, 18, if (item.fileAvailable) Color.rgb(224, 222, 214) else Color.rgb(190, 92, 72))
+        background = rounded(Color.rgb(18, 24, 30), 18, if (item.fileAvailable) Color.rgb(36, 46, 54) else Color.rgb(255, 140, 110))
         isClickable = true; isFocusable = true; setOnClickListener { action() }
         addView(label(item.name, 19, ink))
         val type = if (item.type == DocumentType.PDF) "PDF · ${item.pageCount} ${if (item.pageCount == 1) "page" else "pages"}" else "Image"
@@ -1110,10 +1126,10 @@ class MainActivity : ComponentActivity() {
         val summary = listOfNotNull(
             item.policyNumber?.let { "Policy $it" }, item.insuredName, item.expiryDate?.let { "Expires $it" }
         ).joinToString(" · ").ifBlank { "OCR summary not created yet" }
-        addView(label(summary, 14, if (item.fileAvailable) forest else Color.rgb(167, 66, 54)).apply {
+        addView(label(summary, 14, if (item.fileAvailable) forest else Color.rgb(255, 120, 104)).apply {
             setPadding(0, dp(9), 0, 0); maxLines = 2
         })
-        if (!item.fileAvailable) addView(label("Original file unavailable · tap for options", 13, Color.rgb(167, 66, 54)).apply { setPadding(0, dp(8), 0, 0) })
+        if (!item.fileAvailable) addView(label("Original file unavailable · tap for options", 13, Color.rgb(255, 120, 104)).apply { setPadding(0, dp(8), 0, 0) })
     }
 
     private fun openSavedDocument(item: SavedDocumentSummary) {
@@ -1346,7 +1362,7 @@ class MainActivity : ComponentActivity() {
 
     private fun imageFrame(bitmap: Bitmap, name: String, pdf: Boolean) = LinearLayout(this).apply {
         gravity = Gravity.CENTER; minimumHeight = dp(300)
-        background = rounded(Color.WHITE, 22, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 22, Color.rgb(36, 46, 54))
         addView(ImageView(this@MainActivity).apply {
             setImageBitmap(bitmap); adjustViewBounds = true
             scaleType = if (pdf) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_INSIDE
@@ -1359,7 +1375,7 @@ class MainActivity : ComponentActivity() {
         screen = Screen.ERROR
         val content = page()
         content.addView(textButton("←  Back") { showHome() })
-        content.addView(label("COULDN'T OPEN DOCUMENT", 12, Color.rgb(167, 66, 54)).apply {
+        content.addView(label("COULDN'T OPEN DOCUMENT", 12, Color.rgb(255, 120, 104)).apply {
             letterSpacing = .12f; setPadding(0, dp(32), 0, dp(12))
         })
         content.addView(label(title, 30, ink))
@@ -1373,12 +1389,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scroll(content: View) = ScrollView(this).apply {
-        isFillViewport = true; setBackgroundColor(paper); addView(content)
+        isFillViewport = true; setBackgroundColor(paper); addView(content); padForSystemBars()
     }
 
     private fun privacyCard() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(18))
-        background = rounded(Color.rgb(229, 241, 235), 22)
+        background = rounded(Color.rgb(16, 38, 32), 22)
         addView(label("●  PRIVATE BY DESIGN", 12, forest).apply { letterSpacing = .09f })
         addView(label("Your files stay on this device. OCR runs locally with a bundled model.", 15, ink).apply {
             setPadding(0, dp(9), 0, 0); setLineSpacing(dp(2).toFloat(), 1f)
@@ -1387,14 +1403,14 @@ class MainActivity : ComponentActivity() {
 
     private fun statusCard(note: String) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(16), dp(18), dp(16))
-        background = rounded(Color.rgb(229, 241, 235), 18)
+        background = rounded(Color.rgb(16, 38, 32), 18)
         addView(label("●  ON-DEVICE ONLY", 12, forest).apply { letterSpacing = .08f })
         addView(label(note, 14, ink).apply { setPadding(0, dp(8), 0, 0) })
     }
 
     private fun messageCard(title: String, message: String) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(20))
-        background = rounded(Color.WHITE, 22, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 22, Color.rgb(36, 46, 54))
         addView(label(title, 19, ink))
         addView(label(message, 14, muted).apply { setPadding(0, dp(8), 0, 0) })
     }
@@ -1402,12 +1418,12 @@ class MainActivity : ComponentActivity() {
     private fun textCard(text: String) = TextView(this).apply {
         this.text = text; textSize = 15f; setTextColor(ink); setTextIsSelectable(true)
         setLineSpacing(dp(4).toFloat(), 1f); setPadding(dp(18), dp(18), dp(18), dp(18))
-        background = rounded(Color.WHITE, 18, Color.rgb(224, 222, 214))
+        background = rounded(Color.rgb(18, 24, 30), 18, Color.rgb(36, 46, 54))
     }
 
     private fun emptyState() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-        setPadding(dp(24), dp(28), dp(24), dp(28)); background = rounded(Color.WHITE, 22, Color.rgb(224, 222, 214))
+        setPadding(dp(24), dp(28), dp(24), dp(28)); background = rounded(Color.rgb(18, 24, 30), 22, Color.rgb(36, 46, 54))
         addView(label("▤", 32, forest).apply { gravity = Gravity.CENTER })
         addView(label("No documents yet", 20, ink).apply { gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(6)) })
         addView(label("Add an image or PDF to begin.", 14, muted).apply { gravity = Gravity.CENTER })
@@ -1415,7 +1431,7 @@ class MainActivity : ComponentActivity() {
 
     private fun actionButton(text: String, primary: Boolean, action: () -> Unit) = Button(this).apply {
         this.text = text; textSize = 16f; isAllCaps = false; gravity = Gravity.CENTER
-        setTextColor(if (primary) Color.WHITE else forest)
+        setTextColor(if (primary) paper else forest)
         background = rounded(if (primary) forest else Color.TRANSPARENT, 18, forest)
         minHeight = dp(58); setOnClickListener { action() }
     }
@@ -1451,6 +1467,9 @@ class MainActivity : ComponentActivity() {
     private enum class Screen { HOME, LIBRARY, PREVIEW, OCR_LOADING, OCR_RESULTS, INSURANCE_SUMMARY, QA, COVERAGE, FIELD_EVIDENCE, COVERAGE_EVIDENCE, REMINDER, ERROR }
 
     companion object {
+        const val EXTRA_OPEN_DOCUMENT = "com.kaagaz.app.OPEN_DOCUMENT"
+        const val EXTRA_PICK_DOCUMENT = "com.kaagaz.app.PICK_DOCUMENT"
+        const val EXTRA_LIBRARY = "com.kaagaz.app.LIBRARY"
         private const val MAX_PDF_PAGES = 10
         private const val OCR_RENDER_WIDTH = 1800
         private const val PROGRESS_TAG = "ocr_progress"

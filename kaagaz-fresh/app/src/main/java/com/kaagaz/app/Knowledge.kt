@@ -94,7 +94,7 @@ object Normalizer {
     fun forType(type: FactType, raw: String): String? = when (type) {
         FactType.FULL_NAME, FactType.INSURED_PERSON, FactType.ACCOUNT_HOLDER -> name(raw).takeIf { it.split(' ').size in 1..6 && it.length >= 3 }
         FactType.DATE_OF_BIRTH, FactType.BILL_DATE, FactType.DUE_DATE, FactType.POLICY_EXPIRY -> date(raw)
-        FactType.EMAIL -> raw.trim().lowercase(Locale.ENGLISH).takeIf { Regex("^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$").matches(it) }
+        FactType.EMAIL -> raw.trim().replace(Regex("\\s*@\\s*"), "@").lowercase(Locale.ENGLISH).takeIf { Regex("^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$").matches(it) }
         FactType.PHONE -> phone(raw)
         FactType.GRADUATION_YEAR -> Regex("\\b(19|20)\\d{2}\\b").find(raw)?.value
         FactType.CGPA -> Regex("\\d{1,3}(?:\\.\\d{1,2})?").find(raw)?.value
@@ -108,6 +108,7 @@ object Normalizer {
         FactType.DATE_OF_BIRTH, FactType.BILL_DATE, FactType.DUE_DATE, FactType.POLICY_EXPIRY ->
             runCatching { LocalDate.parse(normalized).format(DateTimeFormatter.ofPattern("d MMM uuuu", Locale.ENGLISH)) }.getOrDefault(raw)
         FactType.PREMIUM, FactType.BILL_AMOUNT -> "₹" + indianGrouping(normalized)
+        FactType.EMAIL -> normalized
         else -> raw.trim()
     }
 
@@ -158,7 +159,11 @@ object FactExtractor {
         "customer name", "account holder", "consumer name"
     ).joinToString("|") + ")\\b[^:]{0,20}:?\\s*$")
 
-    private val emailPattern = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+    // ML Kit sometimes inserts a space next to "@" ("aarav.mehta @example.com").
+    private val emailPattern = Regex("[A-Za-z0-9._%+-]+ ?@ ?[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+
+    /** A "Skills:" line below a "Skills" heading is its own labelled fact, not the heading's value. */
+    private fun isLabelledLine(text: String): Boolean = text.contains(':') && rules.any { it.label.containsMatchIn(text.substringBefore(':') + ":") }
 
     fun extract(
         documentId: String,
@@ -177,10 +182,12 @@ object FactExtractor {
                     // "Name" must be the whole label, not the start of "Name of policy" etc.
                     if (rule.type == FactType.FULL_NAME && Regex("(?i)^\\s*name\\s+of\\s+(?!the candidate|candidate|student|applicant)").containsMatchIn(line.text)) continue
                     val inline = line.text.substring(match.range.last + 1).trim()
+                    val hasSeparator = match.value.contains(Regex("[:–-]"))
                     val (rawValue, source) = when {
-                        inline.isNotBlank() && match.value.contains(Regex("[:–-]")) -> inline to line
-                        inline.isNotBlank() && inline.split(' ').size <= 8 && !anyLabel.containsMatchIn(line.text) -> inline to line
-                        else -> valueFor(lines, index, boxOf)?.let { it.text.trim() to it } ?: continue
+                        inline.isNotBlank() && hasSeparator -> inline to line
+                        // "DEGREE CERTIFICATE" is a title, not "Degree: Certificate": no separator means no inline value.
+                        inline.isNotBlank() -> continue
+                        else -> valueFor(lines, index, boxOf)?.takeUnless { isLabelledLine(it.text) }?.let { it.text.trim() to it } ?: continue
                     }
                     val normalized = Normalizer.forType(rule.type, rawValue) ?: continue
                     facts += Fact(documentId, documentName, rule.type, rawValue, normalized, page.pageNumber,
@@ -195,7 +202,8 @@ object FactExtractor {
             }
             certificatePhrases(documentId, documentName, page, extractedAt).let(facts::addAll)
         }
-        insuranceFields.filter { it.displayedValue != null && it.status != VerificationStatus.NOT_FOUND }.forEach { field ->
+        // Only supported or user-confirmed insurance values become facts; NEEDS_REVIEW pairs are often label/label mix-ups.
+        insuranceFields.filter { it.displayedValue != null && (it.status == VerificationStatus.SUPPORTED || it.isUserConfirmed) }.forEach { field ->
             val type = when (field.key) {
                 InsuranceFieldKey.POLICY_NUMBER -> FactType.POLICY_NUMBER
                 InsuranceFieldKey.PREMIUM -> FactType.PREMIUM
@@ -222,7 +230,8 @@ object FactExtractor {
             val line = page.lines.firstOrNull { raw.split(' ').first() in it.text } ?: page.lines.firstOrNull()
             out += Fact(documentId, documentName, type, raw.trim(), normalized, page.pageNumber, sentence.trim(), line?.confidence ?: 1f, ExtractionMethod.PATTERN_RULE, at)
         }
-        Regex("(?i)certify that\\s+(?:mr\\.?|ms\\.?|mrs\\.?)?\\s*([A-Z][a-zA-Z.]+(?:\\s+[A-Z][a-zA-Z.]+){1,4})").find(text)?.let { add(FactType.FULL_NAME, it.groupValues[1], it.value) }
+        // Names are matched case-sensitively (capitalised words), so "has been awarded" is never part of the name.
+        Regex("(?i:certify that)\\s+(?:Mr\\.?|Ms\\.?|Mrs\\.?|Shri|Smt\\.?)?\\s*([A-Z][a-zA-Z.]+(?:\\s+[A-Z][a-zA-Z.]+){1,4})").find(text)?.let { add(FactType.FULL_NAME, it.groupValues[1], it.value) }
         Regex("(?i)degree of\\s+((?:Bachelor|Master|Doctor)[^.,;]{3,60}?)(?=\\s+(?:in the year|with|from|on|has|at)\\b|[.,;])").find(text)?.let { add(FactType.DEGREE, it.groupValues[1], it.value) }
         Regex("(?i)in the year\\s+((?:19|20)\\d{2})").find(text)?.let { add(FactType.GRADUATION_YEAR, it.groupValues[1], it.value) }
         return out

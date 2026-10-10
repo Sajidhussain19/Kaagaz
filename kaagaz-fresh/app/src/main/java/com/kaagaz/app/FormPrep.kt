@@ -22,6 +22,8 @@ object FieldIdentifier {
         FactType.SKILLS to listOf("skills", "skill"),
         FactType.FULL_NAME to listOf("full name", "applicant name", "candidate name", "your name", "name", "who am i"),
         FactType.DUE_DATE to listOf("due date", "pay by", "when is the bill due", "bill due"),
+        FactType.POLICY_EXPIRY to listOf("policy expire", "policy expiry", "expiry date", "valid until"),
+        FactType.POLICY_NUMBER to listOf("policy number", "policy no"),
         FactType.BILL_AMOUNT to listOf("amount due", "bill amount", "how much is the bill", "how much do i owe")
     )
 

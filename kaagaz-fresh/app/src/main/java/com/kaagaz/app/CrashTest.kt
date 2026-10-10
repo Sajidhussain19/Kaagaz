@@ -113,14 +113,15 @@ object CrashTest {
                     "Pay or confirm the outstanding premium before the grace period ends.")
             }
         }
-        documents.filter { it.kind == DocKind.INSURANCE_POLICY }.forEach { doc ->
-            listOf("What are the claim requirements?" to "claim requirements", "What exclusions are listed?" to "exclusions").forEach { (question, what) ->
-                val answer = CoverageIntelligenceEngine.answer(question, doc.pages, doc.insuranceFields)
-                if (answer.kind == CoverageIntelligenceEngine.AnswerKind.NOT_FOUND) findings += Finding("unanswerable:${doc.id}:$what",
-                    FindingKind.UNANSWERABLE_INSURANCE, Severity.LOW, "${what.replaceFirstChar { it.uppercase() }} not found in ${doc.name}",
-                    "The saved policy text does not state its $what, so Kaagaz cannot answer questions about them.", emptyList(),
-                    "Ask the insurer for the complete policy wording.")
-            }
+        // One finding per topic (not per policy), listing every policy whose text cannot establish it.
+        val policies = documents.filter { it.kind == DocKind.INSURANCE_POLICY }
+        listOf("What are the claim requirements?" to "claim requirements", "What exclusions are listed?" to "exclusions").forEach { (question, what) ->
+            val silent = policies.filter { CoverageIntelligenceEngine.answer(question, it.pages, it.insuranceFields).kind == CoverageIntelligenceEngine.AnswerKind.NOT_FOUND }
+            if (silent.isNotEmpty()) findings += Finding("unanswerable:$what:${silent.map { it.id }.sorted().hashCode()}",
+                FindingKind.UNANSWERABLE_INSURANCE, Severity.LOW,
+                "${what.replaceFirstChar { it.uppercase() }} not stated in ${silent.size} ${if (silent.size == 1) "policy" else "policies"}",
+                "Kaagaz cannot answer questions about $what for: ${silent.joinToString { it.name }}.", emptyList(),
+                "Ask the insurer for the complete policy wording.")
         }
         val order = Severity.values()
         return findings.distinctBy { it.id }.sortedWith(compareBy({ order.indexOf(it.severity) }, { it.title }))

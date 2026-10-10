@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- The OCR model is bundled. Removing transitive network permissions makes local-only processing enforceable. -->
+    <!-- OCR and Gemma run locally. Removing transitive network permissions makes local-only processing enforceable. -->
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -11,14 +11,24 @@
         android:allowBackup="false"
         android:label="@string/app_name"
         android:theme="@style/Theme.Kaagaz"
+        android:largeHeap="true"
         android:usesCleartextTraffic="false">
+        <!-- Optional vendor libraries that let LiteRT-LM use the GPU; the app still runs on CPU without them. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+
         <activity
-            android:name=".MainActivity"
-            android:exported="true">
+            android:name=".MissionActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
