@@ -38,12 +38,13 @@ Its core idea is **proof-carrying AI**:
 - **Mission Mode:** PLAN → RETRIEVE → EXTRACT → VALIDATE → PROPOSE → **APPROVAL** → EXECUTE → **VERIFY**. Plans are proposed by Gemma or by rules, checked against a whitelist, and the safety steps are always enforced.
 - **Snap any form:** scan or import a real blank form; Kaagaz reads its field labels on device and fills them only from verified facts, each with its source, with tap-to-copy for websites. Sensitive fields (bank, password, OTP, Aadhaar) are flagged, signatures are left to you, and nothing is ever submitted.
 - **Money and insurance:** bills, due dates, duplicates, and paid vs outstanding vs scheduled premiums. Guaranteed and projected benefits are kept separate, waiting periods and exclusions are flagged, and approved reminders use WorkManager.
-- **Today's Brief:** what needs you today, ranked by urgency.
+- **Today:** up to four plain-language actions, ranked by urgency ("Pay electricity bill · ₹2,340 · due Tue 20 Oct", "Confirm your graduation year: résumé says 2024, certificate says 2023").
+- **Fix-it Letters:** one tap drafts the email nobody wants to write: a correction request to the registrar, or a duplicate-bill dispute, quoting the exact document, page and line. You send it through any app; Kaagaz never sends anything itself.
 - **Privacy:** documents are kept in app-private storage, the profile is encrypted with AES-256-GCM using an Android Keystore key, backups are disabled, and nothing is logged about document contents.
 
 ## Try it in 3 minutes
 
-1. Install `output/demo/Kaagaz-mission-os-v5.apk` on an arm64 Android 8+ phone.
+1. Install `output/demo/Kaagaz-mission-os-v6.apk` on an arm64 Android 8+ phone.
 2. On the home screen, tap **Install demo pack**. Five clearly labelled fictional documents go through the real OCR pipeline.
 3. Follow **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
 
@@ -64,7 +65,7 @@ Requires Android SDK platform 36 and build-tools 36.1.0. If the checkout lives u
 | [Architecture](docs/ARCHITECTURE.md) | Packages, data flow, safety design, storage |
 | [Demo script](docs/DEMO_SCRIPT.md) | A 3-minute judged walkthrough |
 | [Judging map](docs/JUDGING.md) | Each criterion, with evidence and honest limits |
-| [Testing](docs/TESTING.md) | 129 unit tests, plus an on-device verification log |
+| [Testing](docs/TESTING.md) | 131 unit tests, plus an on-device verification log |
 | [Attribution & originality](docs/ATTRIBUTION.md) | Libraries, models, licences, and what existed before this work |
 
 All documents in this repository are **fictional** test fixtures.

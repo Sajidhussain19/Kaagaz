@@ -29,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.kaagaz.app.audit.CrashTest
 import com.kaagaz.app.brief.DailyBrief
+import com.kaagaz.app.letters.FixItLetters
 import com.kaagaz.app.ocr.DemoPack
 import com.kaagaz.app.ocr.DocumentIngestor
 import com.kaagaz.app.proof.ProofPackExporter
@@ -94,6 +95,8 @@ class MissionActivity : ComponentActivity() {
     private var modelBusyText: String? = null
     private var pendingApproval: Set<MissionAction>? = null
     private var brief: List<DailyBrief.Item> = emptyList()
+    private var briefStatus = ""
+    @Volatile private var lastFindings: List<Finding> = emptyList()
     private var demoMissing: List<String> = emptyList()
     private var intakeStatus: String? = null
     private var cameraFile: java.io.File? = null
@@ -218,6 +221,33 @@ class MissionActivity : ComponentActivity() {
         }
     }
 
+    /** Fix-it Letters: preview the drafted correction/dispute, then share through any app (or copy). Nothing is sent by Kaagaz. */
+    private fun draftLetter(type: FactType?, findingId: String?, finding: Finding? = null) {
+        val s = snap ?: return toast("Still reading documents…")
+        val letter = when {
+            type != null -> s.ledger.firstOrNull { it.type == type }?.let { FixItLetters.correction(it, s.kinds, FixItLetters.fullName(s.ledger)) }
+            else -> (finding ?: lastFindings.firstOrNull { it.id == findingId })?.let { f ->
+                val holder = s.facts.firstOrNull { it.type == FactType.ACCOUNT_HOLDER && f.evidence.any { e -> e.documentId == it.documentId } }?.rawValue
+                FixItLetters.duplicateBill(f, holder)
+            }
+        } ?: return toast("Nothing to draft for this item")
+        val body = TextView(this).apply {
+            text = "To: ${letter.recipient}\nSubject: ${letter.subject}\n\n${letter.body}"; setTextColor(Palette.ink); textSize = 14f
+            setPadding(ui.dp(22), ui.dp(12), ui.dp(22), ui.dp(12)); setTextIsSelectable(true)
+        }
+        AlertDialog.Builder(this).setTitle("✉ ${letter.title}")
+            .setView(ScrollView(this).apply { addView(body) })
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Copy") { _, _ ->
+                (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText(letter.subject, letter.body))
+                toast("Letter copied")
+            }
+            .setPositiveButton("Share") { _, _ ->
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, letter.subject).putExtra(Intent.EXTRA_TEXT, letter.body), "Send fix-it letter with…"))
+            }.show()
+    }
+
     private fun modelLine() = if (gemma.isReady) "Gemma ${gemma.label} on ${gemma.state.backend}" else "no language model (deterministic engine)"
 
     override fun onResume() {
@@ -239,9 +269,9 @@ class MissionActivity : ComponentActivity() {
             val s = knowledge.snapshot()
             val states = knowledge.findingStates()
             val findings = runCatching { CrashTest.run(s.documents.filter { it.kind != DocKind.INSURANCE_POLICY }, s.facts, s.ledger).filter { states[it.id] == null } }.getOrDefault(emptyList())
-            Triple(s, DailyBrief.build(s.ledger, s.facts, findings), DemoPack.missing(store))
+            Triple(s, DailyBrief.brief(s.ledger, s.facts, findings, kinds = s.kinds), DemoPack.missing(store)).also { lastFindings = findings }
         }) { r ->
-            r.onSuccess { (s, b, d) -> snap = s; brief = b; demoMissing = d }.onFailure { toast("Could not read saved documents: ${it.message}") }
+            r.onSuccess { (s, b, d) -> snap = s; brief = b.items; briefStatus = b.status; demoMissing = d }.onFailure { toast("Could not read saved documents: ${it.message}") }
             render()
         }
     }
@@ -308,20 +338,26 @@ class MissionActivity : ComponentActivity() {
             content.addView(card, ui.lp(14))
         }
 
-        // Today's brief
+        // Today: one clean card of plain-language actions.
         if (s != null && brief.isNotEmpty()) {
-            val card = ui.card(if (brief.any { it.tone == DailyBrief.Tone.URGENT }) Palette.amber else Palette.mint)
-            card.addView(ui.eyebrow("Today's brief", Palette.amber))
-            brief.forEach { item ->
+            val card = ui.card(null, Palette.surface)
+            val head = ui.row()
+            val titles = ui.column()
+            titles.addView(ui.eyebrow("Today", Palette.mint))
+            titles.addView(ui.text(briefStatus, 17f, Palette.ink, bold = true), ui.lp(4))
+            head.addView(titles, ui.weight())
+            head.addView(ui.text(LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH)), 12f, Palette.faint, mono = true))
+            card.addView(head)
+            brief.forEachIndexed { index, item ->
+                if (index > 0) card.addView(android.view.View(this).apply { setBackgroundColor(Palette.line) }, LinearLayout.LayoutParams(-1, ui.dp(1)).apply { topMargin = ui.dp(12) })
                 val color = when (item.tone) { DailyBrief.Tone.URGENT -> Palette.red; DailyBrief.Tone.ATTENTION -> Palette.amber; DailyBrief.Tone.INFO -> Palette.blue; DailyBrief.Tone.GOOD -> Palette.mint }
-                val r = ui.row().apply { setPadding(0, ui.dp(10), 0, 0) }
-                r.addView(ui.text("●", 13f, color))
+                val r = ui.row().apply { setPadding(0, ui.dp(12), 0, 0) }
+                r.addView(android.view.View(this).apply { background = ui.rounded(color, 3) }, LinearLayout.LayoutParams(ui.dp(4), ui.dp(38)))
                 val col = ui.column()
                 col.addView(ui.text(item.title, 15.5f, Palette.ink, bold = true))
-                col.addView(ui.text(item.detail, 12.5f, Palette.muted), ui.lp(2))
-                r.addView(col, ui.weight(1f, 10))
-                r.addView(ui.text("›", 20f, Palette.faint))
-                r.setOnClickListener {
+                col.addView(ui.text(item.detail, 12.5f, Palette.muted).apply { maxLines = 2 }, ui.lp(3))
+                r.addView(col, ui.weight(1f, 12))
+                val open = {
                     when (item.target) {
                         DailyBrief.Target.LEDGER -> go(Screen.LEDGER)
                         DailyBrief.Target.CRASH_TEST -> { crashResults = null; go(Screen.CRASH) }
@@ -329,7 +365,10 @@ class MissionActivity : ComponentActivity() {
                         DailyBrief.Target.DOCUMENT -> item.documentId?.let(::openDocument)
                     }
                 }
+                r.addView(ui.chip(item.action.uppercase(), color).apply { setOnClickListener { open() } })
+                r.setOnClickListener { open() }
                 card.addView(r)
+                if (item.letterFor != null || item.findingId != null) card.addView(ui.link("✉ Draft fix letter", Palette.violet) { draftLetter(item.letterFor, item.findingId) }.apply { setPadding(ui.dp(16), ui.dp(6), 0, 0) })
             }
             content.addView(card, ui.lp(16))
         }
@@ -609,6 +648,7 @@ class MissionActivity : ComponentActivity() {
             card.addView(gBox, ui.lp(10))
         }
         if (e.resolvedByUser) card.addView(ui.link("Undo my choice", Palette.amber) { knowledge.clearResolution(e.type); refreshSoon() })
+        if (e.state == TrustState.CONFLICTING) card.addView(ui.link("✉ Draft a letter to get this corrected", Palette.violet) { draftLetter(e.type, null) })
         if (e.state == TrustState.MISSING) card.addView(ui.ghost("Scan a document that states it") { startActivity(Intent(this, DocumentActivity::class.java).putExtra(DocumentActivity.EXTRA_PICK_DOCUMENT, true)) }, ui.lp(10))
         return card
     }
@@ -708,6 +748,7 @@ class MissionActivity : ComponentActivity() {
                 card.addView(ev)
             }
             card.addView(ui.text("Next: ${f.nextAction}", 13f, Palette.lime), ui.lp(8))
+            if (f.kind == FindingKind.CONFLICT || f.kind == FindingKind.DUPLICATE_BILL) card.addView(ui.link("✉ Draft fix letter", Palette.violet) { draftLetter(f.factType.takeIf { f.kind == FindingKind.CONFLICT }, f.id, f) })
             val actions = ui.row()
             if (f.kind == FindingKind.CONFLICT || f.kind == FindingKind.NAME_VARIANT || f.kind == FindingKind.LOW_CONFIDENCE) actions.addView(ui.ghost("Resolve in ledger") { go(Screen.LEDGER) }, ui.weight())
             else actions.addView(ui.ghost("Mark resolved") { confirm("Mark as resolved?", "“${f.title}” will move to the resolved list. You can reopen it.") { knowledge.setFindingState(f.id, "RESOLVED"); render() } }, ui.weight())

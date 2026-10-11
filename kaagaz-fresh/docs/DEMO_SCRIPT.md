@@ -8,7 +8,7 @@
 
 | Time | Do | Say |
 |---|---|---|
-| 0:00 | Home screen | "Kaagaz is an on-device paperwork agent. No internet permission at all; Gemma runs on this phone's GPU. Today's Brief already shows two conflicting records, a duplicate bill and a payment due in 9 days." |
+| 0:00 | Home screen | "Kaagaz is an on-device paperwork agent. No internet permission at all; Gemma runs on this phone's GPU. Today tells me exactly what to do: confirm my graduation year (résumé says 2024, certificate says 2023), don't pay a bill twice, pay ₹2,340 by Tuesday." Tap **Draft fix letter**: "And it writes the email to the registrar for me, quoting both documents with page numbers. I send it from any app; Kaagaz never sends anything itself." |
 | 0:20 | Open the **Trust Ledger** | "Every fact carries its document, page and the exact OCR line. The red edges are the planted conflicts: graduation year 2023 vs 2024, and date of birth March vs May. Kaagaz never silently picks one." |
 | 0:45 | **Ask:** "What is my graduation year?" | "It refuses to guess and shows both sources." |
 | 0:55 | **Ask:** "What happens if the policyholder dies?" | "This is Gemma: a grounded answer in under a second, with a citation." |
