@@ -14,7 +14,7 @@
 
 ## Setup (2 minutes, before evaluators arrive)
 
-1. Install `output/demo/Kaagaz-mission-os-v9.apk`.
+1. Install [`release/Kaagaz-mission-os-v9.apk`](release/Kaagaz-mission-os-v9.apk).
 2. Open **Privacy & model** and import `gemma3-1b-it-int4.litertlm`, then wait for **GEMMA · GPU** on the home screen.
 3. On the home screen, tap **Install demo pack**: 8 clearly labelled fictional documents (résumé, certificate, transcript, bills, loan, blank scholarship form).
 4. Optional: for a clean Today card, uninstall and reinstall, then load only the demo pack (this deletes imported documents and the model, so re-import Gemma).
