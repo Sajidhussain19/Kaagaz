@@ -101,6 +101,7 @@ object FormMapper {
     fun map(spec: FormSpec, ledger: List<LedgerEntry>): List<FieldProposal> = spec.fields.map { field ->
         when {
             field.sensitiveReason != null -> FieldProposal(field, null, TrustState.NEEDS_CONFIRMATION, emptyList(), "Review flag: ${field.sensitiveReason} Kaagaz will not fill this.")
+            field.label.contains("signature", ignoreCase = true) -> FieldProposal(field, null, TrustState.MISSING, emptyList(), "Sign this yourself. Kaagaz never signs on your behalf.")
             field.type == null -> FieldProposal(field, null, TrustState.MISSING, emptyList(), "Kaagaz does not know what this field expects.")
             else -> {
                 val entry = ledger.firstOrNull { it.type == field.type }
@@ -118,5 +119,5 @@ object FormMapper {
         }
     }
 
-    fun sourceNote(group: ValueGroup): String = group.facts.joinToString("; ") { "${it.documentName} p.${it.page}" }
+    fun sourceNote(group: ValueGroup): String = group.facts.map { "${it.documentName} p.${it.page}" }.distinct().joinToString("; ")
 }

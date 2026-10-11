@@ -54,6 +54,14 @@ build("transcript.pdf", [Paragraph("KAVERI INSTITUTE OF TECHNOLOGY (FICTIONAL)",
     *lines("Name of the candidate: Aarav Mehta", "Date of birth: 14 May 2002", "Programme: Bachelor of Technology in Computer Science",
            "Semester 8 SGPA 8.6", "Final CGPA: 8.4")])
 
+build("scholarship-application-form.pdf", [Paragraph("NATIONAL MERIT SCHOLARSHIP BOARD (FICTIONAL)", H), warn,
+    Paragraph("SCHOLARSHIP APPLICATION FORM", S),
+    *lines("Please fill in every field in block letters.",
+           "Applicant name: ____________________", "Date of birth: ____________________", "Email address: ____________________",
+           "Mobile number: ____________________", "University / college: ____________________", "Degree programme: ____________________",
+           "Year of passing: ____________________", "CGPA: ____________________", "Current employer: ____________________",
+           "Bank account number: ____________________", "Net banking password: ____________________", "Signature: ____________________")])
+
 build("internet-bill.pdf", [Paragraph("SKYLINK FIBRE (FICTIONAL)", H), warn, Paragraph("INTERNET BILL", S),
     *lines("Customer name: Aarav Mehta", "Account number: SKY-7781204", "Bill number: SKY-2026-1007", "Bill date: 07 October 2026",
            "Amount due: INR 799.00", "Due date: 28 October 2026")])

@@ -72,9 +72,13 @@ class KnowledgeService(private val context: Context, private val store: KaagazSt
         val summaries = store.listDocuments()
         val corrections = loadCorrections()
         val documents = mutableListOf<AuditDocument>(); val facts = mutableListOf<Fact>(); val chunks = mutableListOf<Chunk>()
-        summaries.forEach { summary ->
+        val seenFiles = HashSet<String>()
+        // Oldest first, so the original upload is kept and identical re-uploads are counted once.
+        summaries.sortedBy { it.createdAt }.forEach { summary ->
             val stored = runCatching { store.load(summary.id) }.getOrNull() ?: return@forEach
             if (stored.ocrPages.isEmpty()) return@forEach
+            val fingerprint = stored.document.uri.path?.let(::File)?.takeIf { it.isFile }?.let(::sha256)
+            if (fingerprint != null && !seenFiles.add(fingerprint)) return@forEach
             val kind = FactExtractor.classify(stored.ocrPages)
             documents += AuditDocument(summary.id, summary.name, kind, stored.ocrPages, stored.fields)
             facts += FactExtractor.extract(summary.id, summary.name, stored.ocrPages, stored.fields, summary.createdAt).map { fact ->
@@ -88,6 +92,12 @@ class KnowledgeService(private val context: Context, private val store: KaagazSt
         }
         val ledger = TrustLedger.build(facts, documents.associate { it.id to it.kind }, profileRequired, resolutions())
         return KnowledgeSnapshot(documents, summaries, facts, chunks, ledger, System.currentTimeMillis())
+    }
+
+    private fun sha256(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input -> val buf = ByteArray(1 shl 16); while (true) { val n = input.read(buf); if (n < 0) break; digest.update(buf, 0, n) } }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     // ---- user decisions -------------------------------------------------------------------------------------

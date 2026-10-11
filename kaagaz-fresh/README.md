@@ -36,14 +36,14 @@ Its core idea is **proof-carrying AI**:
 - **Ask:** hybrid retrieval (Okapi BM25 fused with structured-fact matches by reciprocal-rank fusion), then **Gemma 3 1B on the GPU**. Every answer is checked against its evidence, and anything that fails falls back to clearly labelled deterministic answers.
 - **Paperwork Crash Test:** audits a document set and, optionally, a form, with severity, evidence, next action, and resolve or dismiss.
 - **Mission Mode:** PLAN → RETRIEVE → EXTRACT → VALIDATE → PROPOSE → **APPROVAL** → EXECUTE → **VERIFY**. Plans are proposed by Gemma or by rules, checked against a whitelist, and the safety steps are always enforced.
-- **Smart form:** a field-by-field mapping with sources. Only verified, non-sensitive values are filled; you can paste labels from any form. Nothing is ever submitted.
+- **Snap any form:** scan or import a real blank form; Kaagaz reads its field labels on device and fills them only from verified facts, each with its source, with tap-to-copy for websites. Sensitive fields (bank, password, OTP, Aadhaar) are flagged, signatures are left to you, and nothing is ever submitted.
 - **Money and insurance:** bills, due dates, duplicates, and paid vs outstanding vs scheduled premiums. Guaranteed and projected benefits are kept separate, waiting periods and exclusions are flagged, and approved reminders use WorkManager.
 - **Today's Brief:** what needs you today, ranked by urgency.
 - **Privacy:** documents are kept in app-private storage, the profile is encrypted with AES-256-GCM using an Android Keystore key, backups are disabled, and nothing is logged about document contents.
 
 ## Try it in 3 minutes
 
-1. Install `output/demo/Kaagaz-mission-os-v4.apk` on an arm64 Android 8+ phone.
+1. Install `output/demo/Kaagaz-mission-os-v5.apk` on an arm64 Android 8+ phone.
 2. On the home screen, tap **Install demo pack**. Five clearly labelled fictional documents go through the real OCR pipeline.
 3. Follow **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
 
@@ -64,7 +64,7 @@ Requires Android SDK platform 36 and build-tools 36.1.0. If the checkout lives u
 | [Architecture](docs/ARCHITECTURE.md) | Packages, data flow, safety design, storage |
 | [Demo script](docs/DEMO_SCRIPT.md) | A 3-minute judged walkthrough |
 | [Judging map](docs/JUDGING.md) | Each criterion, with evidence and honest limits |
-| [Testing](docs/TESTING.md) | 126 unit tests, plus an on-device verification log |
+| [Testing](docs/TESTING.md) | 129 unit tests, plus an on-device verification log |
 | [Attribution & originality](docs/ATTRIBUTION.md) | Libraries, models, licences, and what existed before this work |
 
 All documents in this repository are **fictional** test fixtures.

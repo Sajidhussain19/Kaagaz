@@ -39,6 +39,7 @@ import com.kaagaz.app.audit.Severity
 import com.kaagaz.app.data.KaagazStore
 import com.kaagaz.app.data.KnowledgeService
 import com.kaagaz.app.data.KnowledgeSnapshot
+import com.kaagaz.app.forms.FormLabelExtractor
 import com.kaagaz.app.forms.FormLibrary
 import com.kaagaz.app.forms.FormMapper
 import com.kaagaz.app.forms.FormSpec
@@ -204,7 +205,7 @@ class MissionActivity : ComponentActivity() {
         bg({
             val ledger = TrustLedger.build(s.facts, s.kinds, formSpec.fields.mapNotNull { it.type }.toSet() + knowledge.profileRequired, knowledge.resolutions())
             val states = knowledge.findingStates()
-            val form = formSpec.takeIf { it.id == FormLibrary.universityApplication.id }
+            val form = formSpec
             val findings = CrashTest.run(s.documents.filter { it.kind != DocKind.INSURANCE_POLICY }, s.facts, ledger, form).filter { states[it.id] == null }
             ProofPackExporter(applicationContext, store).export(ProofPackExporter.Input(s.copy(ledger = ledger), formSpec, FormMapper.map(formSpec, ledger), findings, modelLine()))
         }) { r ->
@@ -377,7 +378,7 @@ class MissionActivity : ComponentActivity() {
             Triple("Ask Kaagaz", "Grounded answers with page evidence", Palette.mint) to { go(Screen.ASK) },
             Triple("Camera scan", "Photograph a paper, OCR on device", Palette.blue) to { startCameraScan() },
             Triple("Import file", "PDF or image from your phone", Palette.blue) to { startActivity(Intent(this, DocumentActivity::class.java).putExtra(DocumentActivity.EXTRA_PICK_DOCUMENT, true)) },
-            Triple("Prepare form", "Field-by-field with sources", Palette.lime) to { go(Screen.FORM) },
+            Triple("Fill a form", "Snap any form: filled with proof", Palette.lime) to { go(Screen.FORM) },
             Triple("Audit documents", "Run the Paperwork Crash Test", Palette.amber) to { crashResults = null; go(Screen.CRASH) },
             Triple("Proof Pack", "Export cited, fingerprinted PDF", Palette.violet) to { exportProofPack() }
         ).forEachIndexed { i, (meta, action) ->
@@ -650,7 +651,7 @@ class MissionActivity : ComponentActivity() {
             }, ui.lp(2))
         }
         pick.addView(CheckBox(this).apply {
-            text = "Also check against: ${FormLibrary.universityApplication.title}"; setTextColor(Palette.lime); textSize = 13.5f; isChecked = crashWithForm
+            text = "Also check against: ${formSpec.title}"; setTextColor(Palette.lime); textSize = 13.5f; isChecked = crashWithForm
             buttonTintList = android.content.res.ColorStateList.valueOf(Palette.lime)
             setOnCheckedChangeListener { _, on -> crashWithForm = on; crashResults = null }
         }, ui.lp(8))
@@ -679,7 +680,7 @@ class MissionActivity : ComponentActivity() {
         val selected = s.documents.filter { it.id in (crashSelection ?: emptySet<String>()) }
         if (selected.isEmpty()) return toast("Select at least one document.")
         crashBusy = true; render()
-        val form = if (crashWithForm) FormLibrary.universityApplication else null
+        val form = if (crashWithForm) formSpec else null
         bg({
             Thread.sleep(700) // keep the scanning state visible long enough to read; the work itself is fast
             val facts = s.facts.filter { f -> selected.any { it.id == f.documentId } }
@@ -842,8 +843,27 @@ class MissionActivity : ComponentActivity() {
     // ================================================================= FORM
 
     private fun form(content: LinearLayout) {
-        header(content, "Smart form", formSpec.title, "Kaagaz proposes only verified values and shows the source of each. It never submits.")
+        header(content, "Smart form", formSpec.title, "Snap any real form. Kaagaz reads its fields and fills them only with verified facts, each with its source. It never submits or signs.")
         val s = snap ?: return loading(content, "Reading documents…")
+
+        // Fill a real form: any saved document that looks like a blank form becomes a fillable spec.
+        val blankForms = s.documents.filter { FormLabelExtractor.isBlankForm(it.pages) }
+        val real = ui.card(Palette.lime, Palette.raised)
+        real.addView(ui.eyebrow("Fill a real form", Palette.lime))
+        real.addView(ui.text(if (blankForms.isEmpty()) "Scan or import a blank form; Kaagaz reads its field labels on device." else "Blank forms found in your documents:", 13.5f, Palette.muted), ui.lp(6))
+        blankForms.forEach { doc ->
+            val labels = FormLabelExtractor.labels(doc.pages)
+            val selected = formSpec.id == "doc-${doc.id}"
+            real.addView(ui.ghost("${if (selected) "✓ " else ""}${doc.name} · ${labels.size} fields", if (selected) Palette.lime else Palette.ink) {
+                formSpec = FormLibrary.fromLabels(doc.name, labels).copy(id = "doc-${doc.id}"); render()
+            }, ui.lp(8))
+        }
+        val acts = ui.row()
+        acts.addView(ui.ghost("Scan paper form", Palette.blue) { startCameraScan() }, ui.weight())
+        acts.addView(ui.ghost("Import form", Palette.blue) { startActivity(Intent(this, DocumentActivity::class.java).putExtra(DocumentActivity.EXTRA_PICK_DOCUMENT, true)) }, ui.weight(1f, 8))
+        real.addView(acts, ui.lp(10))
+        content.addView(real, ui.lp(14))
+
         val switch = ui.row()
         switch.addView(ui.ghost("Demo university form", if (formSpec.id == FormLibrary.universityApplication.id) Palette.lime else Palette.muted) { formSpec = FormLibrary.universityApplication; render() }, ui.weight())
         switch.addView(ui.ghost("Paste form labels", if (formSpec.id.startsWith("custom")) Palette.lime else Palette.muted) { pasteLabelsDialog() }, ui.weight(1f, 8))
@@ -870,6 +890,12 @@ class MissionActivity : ComponentActivity() {
             card.addView(r)
             card.addView(ui.text(p.value ?: "—", 17f, if (p.value != null) Palette.ink else Palette.faint), ui.lp(6))
             card.addView(ui.text(if (p.fillable) "Source: ${p.note}" else p.note, 12f, Palette.muted), ui.lp(4))
+            // Tap to copy: paste verified values into any website or app form.
+            if (p.fillable) card.addView(ui.link("⧉ Copy value") {
+                (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                    .setPrimaryClip(android.content.ClipData.newPlainText(p.field.label, p.value))
+                toast("Copied ${p.field.label}: ${p.value}")
+            })
             val edit = ui.input(if (p.field.sensitiveReason != null) "Not filled by Kaagaz" else "Value in the form")
             saved[p.field.id]?.let { edit.setText(it.first) }
             edit.isEnabled = p.field.sensitiveReason == null
@@ -900,7 +926,7 @@ class MissionActivity : ComponentActivity() {
             }
         }, ui.lp(10))
         content.addView(ui.ghost("Export Proof Pack (PDF with citations)", Palette.violet) { exportProofPack() }, ui.lp(10))
-        content.addView(ui.ghost("Run crash test on this form", Palette.amber) { crashWithForm = formSpec.id == FormLibrary.universityApplication.id; crashResults = null; go(Screen.CRASH) }, ui.lp(10))
+        content.addView(ui.ghost("Run crash test on this form", Palette.amber) { crashWithForm = true; crashResults = null; go(Screen.CRASH) }, ui.lp(10))
         content.addView(ui.ghost("Clear form values", Palette.muted) { confirm("Clear this form?", "Removes saved values for this form only.") { knowledge.clearForm(formSpec.id); render() } }, ui.lp(10))
 
         content.addView(ui.eyebrow("Encrypted profile", Palette.muted), ui.lp(24))
