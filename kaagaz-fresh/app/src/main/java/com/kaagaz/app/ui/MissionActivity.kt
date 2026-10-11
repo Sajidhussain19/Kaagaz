@@ -30,6 +30,7 @@ import androidx.core.content.ContextCompat
 import com.kaagaz.app.audit.CrashTest
 import com.kaagaz.app.brief.DailyBrief
 import com.kaagaz.app.letters.FixItLetters
+import com.kaagaz.app.reminders.NoteBook
 import com.kaagaz.app.proof.FilledFormRenderer
 import com.kaagaz.app.audit.AuditDocument
 import com.kaagaz.app.forms.FieldProposal
@@ -73,7 +74,7 @@ import java.time.temporal.ChronoUnit
 import java.util.concurrent.Executors
 
 class MissionActivity : ComponentActivity() {
-    private enum class Screen { HOME, ASK, LEDGER, CRASH, MISSION, FORM, MODEL }
+    private enum class Screen { HOME, ASK, LEDGER, CRASH, MISSION, FORM, MODEL, NOTES }
 
     private lateinit var ui: Ui
     private lateinit var store: KaagazStore
@@ -304,6 +305,7 @@ class MissionActivity : ComponentActivity() {
             Screen.MISSION -> missionScreen(content)
             Screen.FORM -> form(content)
             Screen.MODEL -> model(content)
+            Screen.NOTES -> notesScreen(content)
         }
         val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(Palette.ground); addView(content); padForSystemBars() }
         setContentView(scroll)
@@ -321,6 +323,135 @@ class MissionActivity : ComponentActivity() {
         box.addView(PulseView(this), LinearLayout.LayoutParams(ui.dp(72), ui.dp(72)))
         box.addView(ui.text(message, 14f, Palette.muted).apply { gravity = Gravity.CENTER }, ui.lp(10))
         content.addView(box, ui.lp(18))
+    }
+
+    // ================================================================= NOTES & REMINDERS
+
+    private val noteBook by lazy { NoteBook(applicationContext, store.writableDatabase) }
+    private val noteTime = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", java.util.Locale.ENGLISH)
+
+    private fun fmtTime(millis: Long) = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).format(noteTime)
+
+    private fun notesScreen(content: LinearLayout) {
+        header(content, "Notes & reminders", "Don't forget", "Private notes on this phone. Add a reminder and Kaagaz notifies you, even offline.")
+        val input = ui.input("e.g. Carry original degree certificate to the scholarship office", 2)
+        content.addView(input, ui.lp(16))
+        fun save(at: Long?) {
+            val text = input.text.toString().trim()
+            if (text.isEmpty()) return toast("Write a note first")
+            if (at != null && !hasNotificationPermission() && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            noteBook.add(text, at)
+            toast(if (at == null) "Note saved" else "Reminder set for ${fmtTime(at)}")
+            render()
+        }
+        val zone = java.time.ZoneId.systemDefault()
+        val evening = java.time.LocalDate.now().atTime(18, 0).atZone(zone).toInstant().toEpochMilli().let { if (it < System.currentTimeMillis()) it + 86_400_000 else it }
+        val tomorrow = java.time.LocalDate.now().plusDays(1).atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+        val row1 = ui.row()
+        row1.addView(ui.ghost("Save note") { save(null) }, ui.weight())
+        row1.addView(ui.ghost("Remind 6 PM", Palette.amber) { save(evening) }, ui.weight(1f, 8))
+        content.addView(row1, ui.lp(10))
+        val row2 = ui.row()
+        row2.addView(ui.ghost("Tomorrow 9 AM", Palette.amber) { save(tomorrow) }, ui.weight())
+        row2.addView(ui.ghost("Pick date", Palette.amber) {
+            val now = java.time.LocalDate.now()
+            android.app.DatePickerDialog(this, { _, y, m, d ->
+                save(java.time.LocalDate.of(y, m + 1, d).atTime(9, 0).atZone(zone).toInstant().toEpochMilli())
+            }, now.year, now.monthValue - 1, now.dayOfMonth).show()
+        }, ui.weight(1f, 8))
+        content.addView(row2, ui.lp(8))
+
+        // Suggested from documents: one tap turns a deadline Kaagaz found into a reminder note.
+        val s = snap
+        val suggestions = deadlines().filter { it.days in 1..30 }.take(3)
+        if (suggestions.isNotEmpty()) {
+            content.addView(ui.eyebrow("Suggested from your documents", Palette.muted), ui.lp(22))
+            suggestions.forEach { d ->
+                val card = ui.card()
+                card.addView(ui.text(d.title, 14.5f, Palette.ink, bold = true))
+                card.addView(ui.text("${d.docName} · p.${d.page}", 12f, Palette.faint), ui.lp(3))
+                card.addView(ui.link("+ Remind me 2 days before", Palette.amber) {
+                    val at = java.time.LocalDate.now().plusDays((d.days - 2).coerceAtLeast(0)).atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+                    if (!hasNotificationPermission() && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    noteBook.add(d.title + " (" + d.docName + ")", at); toast("Reminder set for ${fmtTime(at)}"); render()
+                })
+                content.addView(card, ui.lp(8))
+            }
+        }
+
+        val notes = runCatching { noteBook.list() }.getOrDefault(emptyList())
+        content.addView(ui.eyebrow("Your notes · ${notes.count { !it.done }} open", Palette.muted), ui.lp(22))
+        if (notes.isEmpty()) content.addView(emptyCard("No notes yet. Notes stay on this phone; reminders arrive as notifications."), ui.lp(8))
+        notes.forEach { n ->
+            val card = ui.card(if (n.done) null else n.remindAt?.let { Palette.amber })
+            val r = ui.row()
+            r.addView(CheckBox(this).apply {
+                isChecked = n.done; buttonTintList = android.content.res.ColorStateList.valueOf(Palette.mint)
+                setOnCheckedChangeListener { _, on -> noteBook.setDone(n, on); render() }
+            })
+            val col = ui.column()
+            col.addView(ui.text(n.text, 15f, if (n.done) Palette.faint else Palette.ink, bold = !n.done).apply { if (n.done) paintFlags = paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG })
+            col.addView(ui.text(n.remindAt?.let { "⏰ ${fmtTime(it)}" + if (it < System.currentTimeMillis()) " · passed" else "" } ?: "No reminder", 12f, Palette.muted), ui.lp(3))
+            r.addView(col, ui.weight(1f, 6))
+            r.addView(ui.text("✕", 16f, Palette.faint).apply { setPadding(ui.dp(10), ui.dp(6), 0, ui.dp(6)); setOnClickListener { confirm("Delete note?", n.text) { noteBook.delete(n); render() } } })
+            card.addView(r)
+            content.addView(card, ui.lp(8))
+        }
+    }
+
+    /** Home: loans read from loan statements (amount, this month's EMI, due date, outstanding). */
+    private fun loansCard(content: LinearLayout, s: KnowledgeSnapshot) {
+        val loanDocs = s.documents.filter { it.kind == DocKind.LOAN_STATEMENT }
+        if (loanDocs.isEmpty()) return
+        content.addView(ui.eyebrow("Loans & EMIs", Palette.muted), ui.lp(22))
+        loanDocs.forEach { doc ->
+            fun v(t: FactType) = s.facts.firstOrNull { it.documentId == doc.id && it.type == t }
+            val due = v(FactType.DUE_DATE)?.let { runCatching { java.time.LocalDate.parse(it.normalized) }.getOrNull() }
+            val days = due?.let { ChronoUnit.DAYS.between(LocalDate.now(), it) }
+            val card = ui.card(if (days != null && days <= 7) Palette.amber else null)
+            val top = ui.row()
+            val col = ui.column()
+            col.addView(ui.text("This month's EMI", 12f, Palette.muted))
+            col.addView(ui.text(v(FactType.EMI_AMOUNT)?.let { Normalizer.display(it.type, it.normalized, it.rawValue) } ?: "—", 26f, Palette.ink, bold = true), ui.lp(2))
+            top.addView(col, ui.weight())
+            if (due != null) top.addView(ui.chip(when { days!! < 0 -> "${-days}D OVERDUE"; days == 0L -> "DUE TODAY"; else -> "DUE ${due.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH)).uppercase()} · ${days}D" }, if (days <= 7) Palette.amber else Palette.mint))
+            card.addView(top)
+            val details = listOfNotNull(
+                v(FactType.LOAN_AMOUNT)?.let { "Loan ${Normalizer.display(it.type, it.normalized, it.rawValue)}" },
+                v(FactType.OUTSTANDING_PRINCIPAL)?.let { "Outstanding ${Normalizer.display(it.type, it.normalized, it.rawValue)}" },
+                v(FactType.INTEREST_RATE)?.rawValue, v(FactType.LOAN_TENURE)?.rawValue)
+            card.addView(ui.text(details.joinToString(" · "), 12.5f, Palette.muted), ui.lp(8))
+            card.addView(ui.text("${doc.name} · read on device", 11.5f, Palette.faint), ui.lp(4))
+            val acts = ui.row()
+            acts.addView(ui.link("+ Remind me", Palette.amber) {
+                if (due == null) return@link
+                val at = due.minusDays(2).atTime(9, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli().coerceAtLeast(System.currentTimeMillis() + 60_000)
+                if (!hasNotificationPermission() && Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                noteBook.add("Pay loan EMI ${v(FactType.EMI_AMOUNT)?.let { Normalizer.display(it.type, it.normalized, it.rawValue) } ?: ""} by ${due.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH))}", at)
+                toast("Reminder set for ${fmtTime(at)}"); render()
+            }, ui.weight())
+            acts.addView(ui.link("View statement ›") { openDocument(doc.id) })
+            card.addView(acts, ui.lp(4))
+            content.addView(card, ui.lp(8))
+        }
+    }
+
+    /** Home: the next few open notes. */
+    private fun notesPreview(content: LinearLayout) {
+        val open = runCatching { noteBook.list() }.getOrDefault(emptyList()).filter { !it.done }.take(3)
+        val r = ui.row()
+        r.addView(ui.eyebrow("Notes & reminders", Palette.muted), ui.weight())
+        r.addView(ui.link("Open →") { go(Screen.NOTES) })
+        content.addView(r, ui.lp(16))
+        if (open.isEmpty()) { content.addView(emptyCard("Nothing to remember yet. Add a note or a reminder."), ui.lp(4)); return }
+        val card = ui.card()
+        open.forEachIndexed { i, n ->
+            if (i > 0) card.addView(ui.divider())
+            card.addView(ui.text(n.text, 14.5f, Palette.ink, bold = true))
+            card.addView(ui.text(n.remindAt?.let { "⏰ ${fmtTime(it)}" } ?: "Note", 12f, Palette.muted), ui.lp(3))
+        }
+        card.setOnClickListener { go(Screen.NOTES) }
+        content.addView(card, ui.lp(4))
     }
 
     // ================================================================= HOME
@@ -435,7 +566,9 @@ class MissionActivity : ComponentActivity() {
             Triple("Import file", "PDF or image from your phone", Palette.blue) to { startActivity(Intent(this, DocumentActivity::class.java).putExtra(DocumentActivity.EXTRA_PICK_DOCUMENT, true)) },
             Triple("Fill a form", "Snap any form: filled with proof", Palette.lime) to { go(Screen.FORM) },
             Triple("Audit documents", "Run the Paperwork Crash Test", Palette.amber) to { crashResults = null; go(Screen.CRASH) },
-            Triple("Proof Pack", "Export cited, fingerprinted PDF", Palette.violet) to { exportProofPack() }
+            Triple("Proof Pack", "Export cited, fingerprinted PDF", Palette.violet) to { exportProofPack() },
+            Triple("Notes & reminders", "Private notes, offline alerts", Palette.amber) to { go(Screen.NOTES) },
+            Triple("Ask about money", "Bills, EMIs, premiums", Palette.mint) to { go(Screen.ASK) }
         ).forEachIndexed { i, (meta, action) ->
             val tile = ui.column(14, 14).apply { background = ui.rounded(Palette.surface, 20, Palette.line); minimumHeight = ui.dp(112); setOnClickListener { action() } }
             tile.addView(ui.text("◆", 18f, meta.third))
@@ -446,6 +579,9 @@ class MissionActivity : ComponentActivity() {
             })
         }
         content.addView(grid, ui.lp(6))
+
+        s?.let { loansCard(content, it) }
+        notesPreview(content)
 
         // Trust ledger
         content.addView(ui.eyebrow("Trust ledger", Palette.muted), ui.lp(22))

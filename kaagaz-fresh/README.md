@@ -45,7 +45,7 @@ Its core idea is **proof-carrying AI**:
 
 ## Try it in 3 minutes
 
-1. Install `output/demo/Kaagaz-mission-os-v7.apk` on an arm64 Android 8+ phone.
+1. Install `output/demo/Kaagaz-mission-os-v8.apk` on an arm64 Android 8+ phone.
 2. On the home screen, tap **Install demo pack**. Five clearly labelled fictional documents go through the real OCR pipeline.
 3. Follow **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
 
@@ -64,9 +64,10 @@ Requires Android SDK platform 36 and build-tools 36.1.0. If the checkout lives u
 | | |
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Packages, data flow, safety design, storage |
+| [Evaluator guide](docs/EVALUATOR_GUIDE.md) | Why Kaagaz, setup, and a 5-minute walkthrough of every feature |
 | [Demo script](docs/DEMO_SCRIPT.md) | A 3-minute judged walkthrough |
 | [Judging map](docs/JUDGING.md) | Each criterion, with evidence and honest limits |
-| [Testing](docs/TESTING.md) | 131 unit tests, plus an on-device verification log |
+| [Testing](docs/TESTING.md) | 133 unit tests, plus an on-device verification log |
 | [Attribution & originality](docs/ATTRIBUTION.md) | Libraries, models, licences, and what existed before this work |
 
 All documents in this repository are **fictional** test fixtures.

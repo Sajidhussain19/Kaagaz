@@ -58,12 +58,14 @@ class KaagazStore(private val context: Context) : SQLiteOpenHelper(context, DB_N
         createRemindersTable(db)
         createDocumentLinksTable(db)
         createMissionTables(db)
+        com.kaagaz.app.reminders.NoteBook.createTable(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createRemindersTable(db)
         if (oldVersion < 3) createDocumentLinksTable(db)
         if (oldVersion < 4) createMissionTables(db)
+        if (oldVersion < 5) com.kaagaz.app.reminders.NoteBook.createTable(db)
     }
 
     fun import(uri: Uri, name: String, type: DocumentType, mimeType: String, pageCount: Int): SelectedDocument {
@@ -305,5 +307,5 @@ class KaagazStore(private val context: Context) : SQLiteOpenHelper(context, DB_N
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_fact_corrections_doc ON fact_corrections(document_id)")
     }
 
-    companion object { private const val DB_NAME = "kaagaz.db"; private const val DB_VERSION = 4 }
+    companion object { private const val DB_NAME = "kaagaz.db"; private const val DB_VERSION = 5 }
 }

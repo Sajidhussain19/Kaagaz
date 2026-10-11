@@ -38,7 +38,12 @@ enum class FactType(val label: String, val scope: FactScope, val profileGroup: S
     BILL_DATE("Bill date", FactScope.DOCUMENT),
     BILL_AMOUNT("Amount due", FactScope.DOCUMENT),
     DUE_DATE("Due date", FactScope.DOCUMENT),
-    POLICY_EXPIRY("Policy expiry", FactScope.DOCUMENT)
+    POLICY_EXPIRY("Policy expiry", FactScope.DOCUMENT),
+    LOAN_AMOUNT("Loan amount", FactScope.DOCUMENT),
+    EMI_AMOUNT("EMI", FactScope.DOCUMENT),
+    INTEREST_RATE("Interest rate", FactScope.DOCUMENT),
+    OUTSTANDING_PRINCIPAL("Outstanding principal", FactScope.DOCUMENT),
+    LOAN_TENURE("Tenure", FactScope.DOCUMENT)
 }
 
 enum class ExtractionMethod(val label: String) {
@@ -53,6 +58,7 @@ enum class DocKind(val title: String) {
     EDUCATION_CERTIFICATE("Education certificate"),
     TRANSCRIPT("Mark sheet / transcript"),
     BILL("Bill / invoice"),
+    LOAN_STATEMENT("Loan statement"),
     PAYMENT_STATEMENT("Payment statement"),
     INSURANCE_POLICY("Insurance policy"),
     OTHER("General paperwork")
@@ -105,7 +111,7 @@ object Normalizer {
         FactType.PHONE -> phone(raw)
         FactType.GRADUATION_YEAR -> Regex("\\b(19|20)\\d{2}\\b").find(raw)?.value
         FactType.CGPA -> Regex("\\d{1,3}(?:\\.\\d{1,2})?").find(raw)?.value
-        FactType.PREMIUM, FactType.BILL_AMOUNT -> money(raw)
+        FactType.PREMIUM, FactType.BILL_AMOUNT, FactType.LOAN_AMOUNT, FactType.EMI_AMOUNT, FactType.OUTSTANDING_PRINCIPAL -> money(raw)
         FactType.POLICY_NUMBER, FactType.BILL_NUMBER -> raw.trim().uppercase(Locale.ENGLISH).replace(Regex("\\s+"), "").takeIf { it.length >= 3 && it.any(Char::isDigit) }
         else -> text(raw).takeIf { it.length >= 2 }
     }
@@ -114,7 +120,7 @@ object Normalizer {
     fun display(type: FactType, normalized: String, raw: String): String = when (type) {
         FactType.DATE_OF_BIRTH, FactType.BILL_DATE, FactType.DUE_DATE, FactType.POLICY_EXPIRY ->
             runCatching { LocalDate.parse(normalized).format(DateTimeFormatter.ofPattern("d MMM uuuu", Locale.ENGLISH)) }.getOrDefault(raw)
-        FactType.PREMIUM, FactType.BILL_AMOUNT -> "₹" + indianGrouping(normalized)
+        FactType.PREMIUM, FactType.BILL_AMOUNT, FactType.LOAN_AMOUNT, FactType.EMI_AMOUNT, FactType.OUTSTANDING_PRINCIPAL -> "₹" + indianGrouping(normalized)
         FactType.EMAIL -> normalized
         else -> raw.trim()
     }
@@ -154,7 +160,12 @@ object FactExtractor {
         Rule(FactType.BILL_NUMBER, lbl("bill (?:number|no\\.?)", "invoice (?:number|no\\.?)")),
         Rule(FactType.BILL_DATE, lbl("bill date", "invoice date", "date of bill")),
         Rule(FactType.BILL_AMOUNT, lbl("total amount due", "amount due", "bill amount", "amount payable", "total due", "net payable")),
-        Rule(FactType.DUE_DATE, lbl("due date", "pay by", "last date(?: of payment)?", "payment due(?: date)?"))
+        Rule(FactType.DUE_DATE, lbl("due date", "emi due date", "next emi date", "pay by", "last date(?: of payment)?", "payment due(?: date)?")),
+        Rule(FactType.LOAN_AMOUNT, lbl("loan amount", "sanctioned amount", "principal amount")),
+        Rule(FactType.EMI_AMOUNT, lbl("emi amount", "monthly emi", "emi")),
+        Rule(FactType.INTEREST_RATE, lbl("interest rate", "rate of interest")),
+        Rule(FactType.OUTSTANDING_PRINCIPAL, lbl("outstanding principal", "principal outstanding", "outstanding balance")),
+        Rule(FactType.LOAN_TENURE, lbl("tenure", "loan tenure"))
     )
 
     private val anyLabel = Regex("(?i)^\\s*(?:" + listOf(
@@ -163,7 +174,7 @@ object FactExtractor {
         "year of passing", "cgpa", "gpa", "percentage", "employer", "company", "designation", "job title", "role", "skills",
         "biller", "service provider", "provider", "bill (?:number|no)", "invoice", "bill date", "amount due", "total amount due",
         "bill amount", "amount payable", "due date", "pay by", "consumer number", "account number", "billing period", "status",
-        "customer name", "account holder", "consumer name"
+        "customer name", "account holder", "consumer name", "loan amount", "emi amount", "emi due date", "interest rate", "outstanding principal", "tenure", "loan account number", "emis paid"
     ).joinToString("|") + ")\\b[^:]{0,20}:?\\s*$")
 
     // ML Kit sometimes inserts a space next to "@" ("aarav.mehta @example.com").
@@ -270,6 +281,7 @@ object FactExtractor {
         DocKind.RESUME to listOf("resume", "curriculum vitae", "work experience", "professional experience", "skills", "objective", "projects"),
         DocKind.EDUCATION_CERTIFICATE to listOf("certify that", "degree of", "awarded", "convocation", "provisional certificate", "degree certificate"),
         DocKind.TRANSCRIPT to listOf("mark sheet", "marksheet", "transcript", "grade card", "semester", "cgpa", "sgpa"),
+        DocKind.LOAN_STATEMENT to listOf("loan account", "loan amount", "emi", "interest rate", "tenure", "outstanding principal"),
         DocKind.BILL to listOf("bill number", "bill no", "invoice", "amount due", "due date", "billing period", "consumer number", "units consumed"),
         DocKind.PAYMENT_STATEMENT to listOf("payment statement", "payment history", "premium paid", "receipt"),
         DocKind.INSURANCE_POLICY to listOf("policy number", "sum insured", "sum assured", "insurer", "premium", "waiting period", "exclusion", "maturity")

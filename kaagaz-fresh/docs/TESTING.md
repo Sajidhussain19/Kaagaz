@@ -1,6 +1,6 @@
 # Testing
 
-## Automated (JVM unit tests): 131 passing
+## Automated (JVM unit tests): 133 passing
 
 ```powershell
 ./gradlew.bat testDebugUnitTest

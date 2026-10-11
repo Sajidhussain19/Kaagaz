@@ -17,7 +17,7 @@ object FixItLetters {
 
     fun kindName(kind: DocKind?) = when (kind) {
         DocKind.RESUME -> "résumé"; DocKind.EDUCATION_CERTIFICATE -> "degree certificate"; DocKind.TRANSCRIPT -> "transcript"
-        DocKind.BILL -> "bill"; DocKind.PAYMENT_STATEMENT -> "payment statement"; DocKind.INSURANCE_POLICY -> "policy"; else -> "document"
+        DocKind.BILL -> "bill"; DocKind.LOAN_STATEMENT -> "loan statement"; DocKind.PAYMENT_STATEMENT -> "payment statement"; DocKind.INSURANCE_POLICY -> "policy"; else -> "document"
     }
 
     /** For a conflicting record: ask the issuer of the official document(s) to confirm and correct. */

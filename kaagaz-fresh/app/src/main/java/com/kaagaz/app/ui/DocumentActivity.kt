@@ -509,7 +509,7 @@ class DocumentActivity : ComponentActivity() {
 
     private fun DocKind.shortName() = when (this) {
         DocKind.RESUME -> "résumé"; DocKind.EDUCATION_CERTIFICATE -> "certificate"; DocKind.TRANSCRIPT -> "transcript"
-        DocKind.BILL -> "bill"; DocKind.PAYMENT_STATEMENT -> "statement"; DocKind.INSURANCE_POLICY -> "policy"; DocKind.OTHER -> "document"
+        DocKind.BILL -> "bill"; DocKind.LOAN_STATEMENT -> "loan"; DocKind.PAYMENT_STATEMENT -> "statement"; DocKind.INSURANCE_POLICY -> "policy"; DocKind.OTHER -> "document"
     }
 
     private fun showDocumentSummary() {

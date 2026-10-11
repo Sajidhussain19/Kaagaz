@@ -62,6 +62,11 @@ build("scholarship-application-form.pdf", [Paragraph("NATIONAL MERIT SCHOLARSHIP
            "Year of passing: ____________________", "CGPA: ____________________", "Current employer: ____________________",
            "Bank account number: ____________________", "Net banking password: ____________________", "Signature: ____________________")])
 
+build("personal-loan-statement.pdf", [Paragraph("SURYA DEMO FINANCE LTD (FICTIONAL)", H), warn, Paragraph("PERSONAL LOAN STATEMENT", S),
+    *lines("Customer name: Aarav Mehta", "Loan account number: SDF-PL-2026-4417", "Loan amount: INR 1,00,000.00",
+           "Interest rate: 13.5% per annum", "Tenure: 12 months", "EMI amount: INR 8,958.00",
+           "EMI due date: 18 October 2026", "Outstanding principal: INR 83,120.00", "EMIs paid: 2 of 12")])
+
 build("internet-bill.pdf", [Paragraph("SKYLINK FIBRE (FICTIONAL)", H), warn, Paragraph("INTERNET BILL", S),
     *lines("Customer name: Aarav Mehta", "Account number: SKY-7781204", "Bill number: SKY-2026-1007", "Bill date: 07 October 2026",
            "Amount due: INR 799.00", "Due date: 28 October 2026")])

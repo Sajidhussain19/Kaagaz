@@ -20,6 +20,7 @@ object DocumentSummarizer {
     private fun priority(kind: DocKind): List<FactType> = when (kind) {
         DocKind.RESUME -> listOf(FactType.FULL_NAME, FactType.EMAIL, FactType.PHONE, FactType.JOB_TITLE, FactType.EMPLOYER, FactType.DEGREE, FactType.INSTITUTION, FactType.GRADUATION_YEAR, FactType.CGPA, FactType.SKILLS)
         DocKind.EDUCATION_CERTIFICATE, DocKind.TRANSCRIPT -> listOf(FactType.FULL_NAME, FactType.DEGREE, FactType.INSTITUTION, FactType.GRADUATION_YEAR, FactType.CGPA, FactType.DATE_OF_BIRTH)
+        DocKind.LOAN_STATEMENT -> listOf(FactType.LOAN_AMOUNT, FactType.EMI_AMOUNT, FactType.DUE_DATE, FactType.OUTSTANDING_PRINCIPAL, FactType.INTEREST_RATE, FactType.LOAN_TENURE, FactType.ACCOUNT_HOLDER)
         DocKind.BILL -> listOf(FactType.BILLER, FactType.ACCOUNT_HOLDER, FactType.BILL_NUMBER, FactType.BILL_DATE, FactType.BILL_AMOUNT, FactType.DUE_DATE)
         else -> FactType.values().toList()
     }
@@ -36,6 +37,7 @@ object DocumentSummarizer {
         return when (kind) {
             DocKind.RESUME -> listOfNotNull(v(FactType.FULL_NAME), v(FactType.JOB_TITLE)?.let { "· $it" }, v(FactType.EMPLOYER)?.let { "at $it" }).joinToString(" ").ifBlank { "Résumé" }
             DocKind.EDUCATION_CERTIFICATE, DocKind.TRANSCRIPT -> listOfNotNull(v(FactType.DEGREE), v(FactType.GRADUATION_YEAR)?.let { "· $it" }).joinToString(" ").ifBlank { kind.title }
+            DocKind.LOAN_STATEMENT -> listOfNotNull(v(FactType.EMI_AMOUNT)?.let { "EMI $it" }, v(FactType.DUE_DATE)?.let { "due $it" }).joinToString(" ").ifBlank { "Loan statement" }
             DocKind.BILL -> listOfNotNull(v(FactType.BILL_AMOUNT)?.let { "$it due" }, v(FactType.DUE_DATE)?.let { "on $it" }).joinToString(" ").ifBlank { "Bill" }
             else -> kind.title
         }

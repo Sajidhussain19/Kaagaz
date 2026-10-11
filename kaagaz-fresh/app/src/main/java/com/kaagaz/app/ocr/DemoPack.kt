@@ -10,7 +10,7 @@ import com.kaagaz.app.data.KaagazStore
  * Installing them runs the real pipeline, so every finding is computed from OCR, not scripted.
  */
 object DemoPack {
-    val files = listOf("aarav-resume.pdf", "degree-certificate.pdf", "transcript.pdf", "electricity-bill.pdf", "electricity-bill-copy.pdf", "scholarship-application-form.pdf")
+    val files = listOf("aarav-resume.pdf", "degree-certificate.pdf", "transcript.pdf", "electricity-bill.pdf", "electricity-bill-copy.pdf", "scholarship-application-form.pdf", "personal-loan-statement.pdf")
 
     fun missing(store: KaagazStore): List<String> {
         val present = store.listDocuments().map { it.name }.toSet()

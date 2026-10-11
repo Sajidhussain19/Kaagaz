@@ -47,12 +47,13 @@ object DailyBrief {
             .filter { (_, _, days) -> days in -30..14 }
             .distinctBy { (f, _, _) -> f.type to f.normalized }
             .forEach { (f, date, days) ->
-                val amount = facts.firstOrNull { it.documentId == f.documentId && it.type == FactType.BILL_AMOUNT }
-                    ?.let { Normalizer.display(FactType.BILL_AMOUNT, it.normalized, it.rawValue) }
-                val what = billName(f.documentName)
+                val emi = facts.firstOrNull { it.documentId == f.documentId && it.type == FactType.EMI_AMOUNT }
+                val amount = (facts.firstOrNull { it.documentId == f.documentId && it.type == FactType.BILL_AMOUNT } ?: emi)
+                    ?.let { Normalizer.display(it.type, it.normalized, it.rawValue) }
+                val what = if (emi != null || kinds[f.documentId] == DocKind.LOAN_STATEMENT) "loan EMI" else billName(f.documentName)
                 val title = if (f.type == FactType.POLICY_EXPIRY) "Renew policy" else "Pay $what" + (amount?.let { " · $it" } ?: "")
                 val whenText = when { days < 0 -> "Was due ${date.format(day)} · ${-days} days overdue"; days == 0L -> "Due today"; days == 1L -> "Due tomorrow"; else -> "Due ${date.format(day)} · in $days days" }
-                items += (if (days < 0) 0 else 10 + days.toInt()) to Item(title, whenText, if (days <= 3) Tone.URGENT else Tone.ATTENTION, Target.DOCUMENT, f.documentId, "View bill")
+                items += (if (days < 0) 0 else 10 + days.toInt()) to Item(title, whenText, if (days <= 3) Tone.URGENT else Tone.ATTENTION, Target.DOCUMENT, f.documentId, if (emi != null) "View loan" else "View bill")
             }
 
         ledger.filter { it.state == TrustState.CONFLICTING }.forEach { e ->
