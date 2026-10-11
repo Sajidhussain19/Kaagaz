@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the Kaagaz icon: jump straight into the four things people do most. All work offline. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="scan" android:enabled="true" android:icon="@drawable/ic_shortcut_scan"
+        android:shortcutShortLabel="@string/shortcut_scan" android:shortcutLongLabel="@string/shortcut_scan_long">
+        <intent android:action="com.kaagaz.app.SHORTCUT" android:targetPackage="com.kaagaz.app" android:targetClass="com.kaagaz.app.ui.MissionActivity">
+            <extra android:name="com.kaagaz.app.MISSION_SCREEN" android:value="SCAN" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="ask" android:enabled="true" android:icon="@drawable/ic_shortcut_ask"
+        android:shortcutShortLabel="@string/shortcut_ask" android:shortcutLongLabel="@string/shortcut_ask_long">
+        <intent android:action="com.kaagaz.app.SHORTCUT" android:targetPackage="com.kaagaz.app" android:targetClass="com.kaagaz.app.ui.MissionActivity">
+            <extra android:name="com.kaagaz.app.MISSION_SCREEN" android:value="ASK" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="notes" android:enabled="true" android:icon="@drawable/ic_shortcut_notes"
+        android:shortcutShortLabel="@string/shortcut_notes" android:shortcutLongLabel="@string/shortcut_notes_long">
+        <intent android:action="com.kaagaz.app.SHORTCUT" android:targetPackage="com.kaagaz.app" android:targetClass="com.kaagaz.app.ui.MissionActivity">
+            <extra android:name="com.kaagaz.app.MISSION_SCREEN" android:value="NOTES" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="audit" android:enabled="true" android:icon="@drawable/ic_shortcut_audit"
+        android:shortcutShortLabel="@string/shortcut_audit" android:shortcutLongLabel="@string/shortcut_audit_long">
+        <intent android:action="com.kaagaz.app.SHORTCUT" android:targetPackage="com.kaagaz.app" android:targetClass="com.kaagaz.app.ui.MissionActivity">
+            <extra android:name="com.kaagaz.app.MISSION_SCREEN" android:value="CRASH" />
+        </intent>
+    </shortcut>
+</shortcuts>

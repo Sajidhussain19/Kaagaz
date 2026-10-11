@@ -125,7 +125,10 @@ class GroundedAnswerer(private val llm: LlmClient) {
     fun validate(raw: String, hits: List<ScoredChunk>): Verdict {
         val text = raw.trim().removePrefix("Answer:").trim()
         if (text.contains("NOT_FOUND", ignoreCase = true)) return Verdict(true, "", emptyList(), true, "")
-        val cited = Regex("\\[(\\d+)]").findAll(text).map { it.groupValues[1].toInt() }.toList().distinct()
+        val marked = Regex("\\[(\\d+)]").findAll(text).map { it.groupValues[1].toInt() }.toList().distinct()
+        // Small models often forget the [n] marker. Repair it only when exactly one passage contains every number
+        // and most content words of the answer; otherwise the answer stays rejected.
+        val cited = marked.ifEmpty { listOfNotNull(attribute(text, hits)) }
         if (cited.isEmpty()) return Verdict(false, text, cited, false, "it cited no evidence")
         if (cited.any { it !in 1..hits.size }) return Verdict(false, text, cited, false, "it cited a passage that does not exist")
         val evidenceDigits = cited.joinToString(" ") { hits[it - 1].chunk.text }.let(::numbers)
@@ -135,6 +138,20 @@ class GroundedAnswerer(private val llm: LlmClient) {
         val lines = text.lines().filter { it.isNotBlank() }
         val clean = lines.take(2).joinToString(" ").let { if (it.length > 260) it.take(257) + "…" else it }
         return Verdict(true, clean, cited, false, "")
+    }
+
+    /** The 1-based index of the single passage that supports an uncited answer, or null if none or several do. */
+    fun attribute(answer: String, hits: List<ScoredChunk>): Int? {
+        if (hits.isEmpty()) return null
+        val retriever = HybridRetriever(hits.map { it.chunk })
+        val words = retriever.tokens(answer).filter { it.length > 2 && it.none(Char::isDigit) }.toSet()
+        if (words.size < 3) return null
+        val nums = numbers(answer)
+        val supporting = hits.indices.filter { i ->
+            val passage = retriever.tokens(hits[i].chunk.text).toSet()
+            numbers(hits[i].chunk.text).containsAll(nums) && words.count { it in passage } >= words.size * 0.6
+        }
+        return supporting.singleOrNull()?.plus(1)
     }
 
     /** Numbers as digit strings without separators ("₹1,50,000" → "150000", "8.40" → "8.4"). */
@@ -154,9 +171,12 @@ class GroundedAnswerer(private val llm: LlmClient) {
 
     /** The best sentence or OCR line: label-value schedules have no full stops, so lines are candidates too. */
     private fun bestSentence(chunk: Chunk, matched: Set<String>, retriever: HybridRetriever): String {
-        val candidates = chunk.text.split(Regex("(?<=[.!?])\\s+")) + chunk.lines.map { it.text }
+        val sentences = chunk.text.split(Regex("(?<=[.!?])\\s+"))
+        // An OCR line that is only part of a complete sentence would be quoted mid-phrase, so the sentence wins.
+        val whole = sentences.filter { it.length <= 220 && Regex("[.!?]$").containsMatchIn(it.trim()) }
+        val candidates = sentences + chunk.lines.map { it.text }.filter { line -> whole.none { line.trim() in it && line.trim() != it.trim() } }
         return candidates.filter { it.isNotBlank() }
-            .maxWithOrNull(compareBy<String> { s -> retriever.tokens(s).count { it in matched } }.thenBy { -it.length }) ?: chunk.text
+            .maxWithOrNull(compareBy<String> { it.length <= 220 }.thenBy { s -> retriever.tokens(s).count { it in matched } }.thenBy { -it.length }) ?: chunk.text
     }
 
     private fun followUps(type: FactType) = listOf("Which documents mention my ${type.label.lowercase(Locale.ENGLISH)}?", "Run the Paperwork Crash Test")

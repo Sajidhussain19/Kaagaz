@@ -14,10 +14,11 @@
 
 ## Setup (2 minutes, before evaluators arrive)
 
-1. Install `output/demo/Kaagaz-mission-os-v8.apk`.
+1. Install `output/demo/Kaagaz-mission-os-v9.apk`.
 2. Open **Privacy & model** and import `gemma3-1b-it-int4.litertlm`, then wait for **GEMMA · GPU** on the home screen.
 3. On the home screen, tap **Install demo pack**: 8 clearly labelled fictional documents (résumé, certificate, transcript, bills, loan, blank scholarship form).
-4. Close Vivo Remote Control. Optionally turn on airplane mode to prove everything is offline.
+4. Optional: for a clean Today card, uninstall and reinstall, then load only the demo pack (this deletes imported documents and the model, so re-import Gemma).
+5. Close Vivo Remote Control. Optionally turn on airplane mode to prove everything is offline.
 
 ## The walkthrough (about 5 minutes)
 
@@ -36,7 +37,7 @@
 | 11 | **★ Print-ready paper form** | **Fill a form → scholarship-application-form.pdf → 🖨 Print-ready filled form**, then open the PDF | "This is the *original paper form*, filled in at the right places from my verified documents. Conflicts, bank details and password are left blank with a reason; there's a sources page at the back. Print, sign, submit. No browser autofill can do this." |
 | 12 | **Mission Mode** | Home: **Prepare my university application…** → Launch, untick all but "Fill", then **Approve** | "Gemma plans from a whitelist, Kotlin executes, and nothing consequential happens without approval. Rejected steps say 'nothing was changed'." |
 | 13 | **Proof Pack** | **Proof Pack** tile | "A portable report: every value, its citation, and a SHA-256 fingerprint of each source file." |
-| 14 | **Capture anywhere** | Share a PDF from Files to **Kaagaz: read privately**, or **Camera scan** | "Works from any app's share sheet or the camera. One on-device pipeline." |
+| 14 | **Capture anywhere** | Share a PDF from Files to **Kaagaz: read privately**, or long-press the Kaagaz icon → **Scan document** | "Works from any app's share sheet, the camera, or straight from the home screen. One on-device pipeline." |
 
 ## Features at a glance
 
@@ -52,7 +53,7 @@
 - **Paperwork Crash Test,** **Mission Mode** with approval and verification, **Proof Pack** with SHA-256 fingerprints.
 - **Intake:** share sheet, camera, file picker, one-tap demo pack. Type-aware summaries for each document.
 - **Privacy:** encrypted profile (Keystore AES-GCM), backups off, no content logging.
-- **Engineering:** 133 unit tests, feature-package architecture, and a device verification log in [TESTING.md](TESTING.md).
+- **Engineering:** 146 unit tests, feature-package architecture, and a device verification log in [TESTING.md](TESTING.md).
 
 ## If asked
 

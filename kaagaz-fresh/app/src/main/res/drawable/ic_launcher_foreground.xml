@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kaagaz mark: a page with a folded corner and a verified tick. Drawn inside the 66dp adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#7CF2C4"
+        android:pathData="M38,28 L62,28 L74,40 L74,76 Q74,80 70,80 L38,80 Q34,80 34,76 L34,32 Q34,28 38,28 Z" />
+    <path android:fillColor="#3FB58C" android:pathData="M62,28 L74,40 L64,40 Q62,40 62,38 Z" />
+    <path android:strokeColor="#090D11" android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M43,60 L51,68 L66,51" />
+    <path android:strokeColor="#090D11" android:strokeWidth="3" android:strokeLineCap="round" android:strokeAlpha="0.55"
+        android:pathData="M42,40 L55,40 M42,48 L60,48" />
+</vector>

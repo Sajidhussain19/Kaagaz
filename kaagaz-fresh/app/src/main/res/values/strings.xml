@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Kaagaz</string>
+    <string name="shortcut_scan">Scan document</string>
+    <string name="shortcut_scan_long">Scan a document privately</string>
+    <string name="shortcut_ask">Ask Kaagaz</string>
+    <string name="shortcut_ask_long">Ask about my documents</string>
+    <string name="shortcut_notes">Notes</string>
+    <string name="shortcut_notes_long">Notes &amp; reminders</string>
+    <string name="shortcut_audit">Crash Test</string>
+    <string name="shortcut_audit_long">Run the Paperwork Crash Test</string>
 </resources>

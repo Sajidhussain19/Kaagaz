@@ -1,6 +1,6 @@
 # Testing
 
-## Automated (JVM unit tests): 133 passing
+## Automated (JVM unit tests): 146 passing
 
 ```powershell
 ./gradlew.bat testDebugUnitTest
@@ -14,6 +14,9 @@
 | `insurance.*` (9 suites) | 63 | Pre-existing policy engine: coverage, exclusions, waiting periods, payments, guaranteed vs projected, cross-document checks, answer safety |
 | `core.ClauseAssemblerTest` | 6 | Sentences rebuilt from wrapped OCR lines |
 | `reminders.ReminderPolicyTest` | 7 | Reminder eligibility and dates |
+| `integration.RetrievalBridgesTest` | 6 | Misspelled questions, OCR misreads in documents, concept thesaurus (EMI → instalment), numbers never fuzzy, abstention on unrelated questions |
+| `integration.CitationRepairTest` | 4 | Uncited Gemma answer attributed to its single supporting passage; invented number or unrelated answer still rejected; whole-sentence quotes |
+| `integration.FixItLettersTest` | 3 | Correction letter quotes both sources and goes to the registrar; none for verified facts; duplicate-bill letter |
 
 Fixtures are **fictional**. `MissionOsFixtures` reproduces, line for line, what ML Kit returned for the demo PDFs on the test phone.
 
@@ -43,6 +46,8 @@ Device: vivo I2501, Android 16 (API 36), Snapdragon SM8850, 16 GB RAM. Checked b
 | Type-aware document screen | Pass: résumé, transcript and bill get summary, Ask and Crash Test; policies keep their insurance actions |
 | Navigation back to Mission control | Pass: Done, Back, picker cancel, library Back and delete all return to Mission control |
 | Gemma document summary | Pass: about 0.9 s; an invented institution name was removed sentence by sentence; neutral pronouns |
+| Launcher shortcuts (11 Oct) | Pass: Ask, Notes and Crash Test open directly; Scan opens the camera |
+| Gemma answer without a citation marker (11 Oct) | Pass after fix: "What happens if the policyholder dies?" answered by Gemma, cited, ~0.75 s |
 | Hand-offs from a document | Pass: "Ask about my documents" and "Run the Paperwork Crash Test" open those Mission screens |
 
 ## Bugs found by device testing (all fixed)
@@ -55,4 +60,6 @@ Device: vivo I2501, Android 16 (API 36), Snapdragon SM8850, 16 GB RAM. Checked b
 - The document screens kept their own old home page, so "Import file" never led back to Mission control. Mission control is now the only home.
 - Every document was offered "View insurance summary". The document type now decides the summary and actions.
 - Android's ICU regex rejects a quantified lookahead that the desktop JVM accepts, so the unit tests passed but summaries failed on the phone. The pattern is now portable, and text cleanup can no longer break an answer.
+- Gemma 1B sometimes left out the `[n]` citation marker, so a correct answer was rejected. The marker is now repaired only when a single passage supports every number and most words.
+- The fallback quote could stop mid-sentence at an OCR line break. Complete short sentences now win over line fragments.
 - Gemma 1B named the wrong institution and guessed gender. Summaries now drop any sentence whose names or numbers are not in the document, and gendered pronouns become "they".

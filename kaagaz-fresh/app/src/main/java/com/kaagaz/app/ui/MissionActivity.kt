@@ -145,8 +145,9 @@ class MissionActivity : ComponentActivity() {
         intent ?: return
         intent.getStringExtra(EXTRA_SCREEN)?.let { target ->
             intent.removeExtra(EXTRA_SCREEN)
-            screen = when (target) { SCREEN_ASK -> Screen.ASK; SCREEN_CRASH -> { crashResults = null; Screen.CRASH }; else -> Screen.HOME }
+            screen = when (target) { SCREEN_ASK -> Screen.ASK; SCREEN_CRASH -> { crashResults = null; Screen.CRASH }; SCREEN_NOTES -> Screen.NOTES; else -> Screen.HOME }
             knowledge.invalidate(); snap = null; refresh()
+            if (target == SCREEN_SCAN) startCameraScan() // launcher shortcut: straight to the camera
             return
         }
         val uris: List<Uri> = when (intent.action) {
@@ -1238,5 +1239,7 @@ class MissionActivity : ComponentActivity() {
         const val EXTRA_SCREEN = "com.kaagaz.app.MISSION_SCREEN"
         const val SCREEN_ASK = "ASK"
         const val SCREEN_CRASH = "CRASH"
+        const val SCREEN_NOTES = "NOTES"
+        const val SCREEN_SCAN = "SCAN"
     }
 }
