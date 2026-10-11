@@ -30,6 +30,9 @@ import androidx.core.content.ContextCompat
 import com.kaagaz.app.audit.CrashTest
 import com.kaagaz.app.brief.DailyBrief
 import com.kaagaz.app.letters.FixItLetters
+import com.kaagaz.app.proof.FilledFormRenderer
+import com.kaagaz.app.audit.AuditDocument
+import com.kaagaz.app.forms.FieldProposal
 import com.kaagaz.app.ocr.DemoPack
 import com.kaagaz.app.ocr.DocumentIngestor
 import com.kaagaz.app.proof.ProofPackExporter
@@ -218,6 +221,19 @@ class MissionActivity : ComponentActivity() {
                     .putExtra(Intent.EXTRA_SUBJECT, "Kaagaz Proof Pack").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 startActivity(Intent.createChooser(send, "Share Proof Pack (leaves this device only if you choose)"))
             }.onFailure { toast("Proof Pack failed: ${it.message}") }
+        }
+    }
+
+    /** Writes verified values onto the user's own blank form and hands the PDF to print / share. */
+    private fun exportFilledForm(form: AuditDocument, proposals: List<FieldProposal>) {
+        toast("Writing verified values onto ${form.name}…")
+        bg({ FilledFormRenderer(applicationContext, store).render(form, proposals) }) { r ->
+            r.onSuccess { res ->
+                toast("Filled ${res.filled} fields · ${res.leftBlank} left for you to check")
+                val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", res.file)
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/pdf").putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Print or save the filled form"))
+            }.onFailure { toast("Could not fill the form: ${it.message}") }
         }
     }
 
@@ -966,6 +982,8 @@ class MissionActivity : ComponentActivity() {
                 knowledge.saveFormValue(formSpec.id, "__saved__", System.currentTimeMillis().toString(), "packet"); toast("Saved locally. Not submitted."); render()
             }
         }, ui.lp(10))
+        val formDoc = s.documents.firstOrNull { "doc-${it.id}" == formSpec.id }
+        if (formDoc != null) content.addView(ui.primary("🖨  Print-ready filled form (PDF)") { exportFilledForm(formDoc, proposals) }, ui.lp(12))
         content.addView(ui.ghost("Export Proof Pack (PDF with citations)", Palette.violet) { exportProofPack() }, ui.lp(10))
         content.addView(ui.ghost("Run crash test on this form", Palette.amber) { crashWithForm = true; crashResults = null; go(Screen.CRASH) }, ui.lp(10))
         content.addView(ui.ghost("Clear form values", Palette.muted) { confirm("Clear this form?", "Removes saved values for this form only.") { knowledge.clearForm(formSpec.id); render() } }, ui.lp(10))

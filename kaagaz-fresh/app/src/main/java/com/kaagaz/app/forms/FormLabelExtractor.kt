@@ -10,6 +10,16 @@ object FormLabelExtractor {
     private val blankLabel = Regex("^\\s*([A-Za-z][A-Za-z0-9 ()/&.'-]{1,48}?)\\s*\\*?\\s*[:：]\\s*(?:[_.\\-/ ]{0,}|\\[\\s*])\\s*$")
     private val underscoreLabel = Regex("^\\s*([A-Za-z][A-Za-z0-9 ()/&.'-]{1,48}?)\\s*\\*?\\s*_{3,}.*$")
 
+    /** A label together with the OCR line it sits on, so a value can be written back onto the page. */
+    data class LabelHit(val label: String, val line: com.kaagaz.app.core.OcrLineEvidence)
+
+    fun hits(pages: List<OcrPageResult>): List<LabelHit> = pages.flatMap { it.lines }.mapNotNull { line ->
+        val text = line.text.trim()
+        if (text.length > 70 || text.split(' ').size > 9) return@mapNotNull null
+        (blankLabel.find(text) ?: underscoreLabel.find(text))?.groupValues?.get(1)?.trim()?.trimEnd('.', '-')
+            ?.takeIf { it.length >= 2 && it.any(Char::isLetter) }?.let { LabelHit(it, line) }
+    }.distinctBy { it.label.lowercase() }
+
     fun labels(pages: List<OcrPageResult>): List<String> = pages.flatMap { it.lines }.mapNotNull { line ->
         val text = line.text.trim()
         if (text.length > 70 || text.split(' ').size > 9) return@mapNotNull null

@@ -9,9 +9,9 @@ Its core idea is **proof-carrying AI**:
 - Conflicts and gaps stay visible instead of being smoothed over.
 - Nothing consequential happens without the user's approval.
 
-| Home & Today's Brief | Trust Ledger | Paperwork Crash Test | Gemma caught out |
+| Today | Print-ready filled form | Trust Ledger | Gemma caught out |
 |---|---|---|---|
-| ![](docs/screenshots/01-home.png) | ![](docs/screenshots/03-trust-ledger.png) | ![](docs/screenshots/04-crash-test.png) | ![](docs/screenshots/06-ask-rejected.png) |
+| ![](docs/screenshots/01-home.png) | ![](docs/screenshots/11-print-ready-form.png) | ![](docs/screenshots/03-trust-ledger.png) | ![](docs/screenshots/06-ask-rejected.png) |
 
 > The last screenshot shows the app working as intended. On-device Gemma answered "12" when the bill says **312**. Kaagaz caught the number missing from the cited evidence, rejected the answer, and showed the exact line instead.
 
@@ -36,6 +36,7 @@ Its core idea is **proof-carrying AI**:
 - **Ask:** hybrid retrieval (Okapi BM25 fused with structured-fact matches by reciprocal-rank fusion), then **Gemma 3 1B on the GPU**. Every answer is checked against its evidence, and anything that fails falls back to clearly labelled deterministic answers.
 - **Paperwork Crash Test:** audits a document set and, optionally, a form, with severity, evidence, next action, and resolve or dismiss.
 - **Mission Mode:** PLAN → RETRIEVE → EXTRACT → VALIDATE → PROPOSE → **APPROVAL** → EXECUTE → **VERIFY**. Plans are proposed by Gemma or by rules, checked against a whitelist, and the safety steps are always enforced.
+- **Print-ready filled forms (paper forms, solved):** government offices, universities and banks still want *their own* paper form. Kaagaz scans the blank form, finds each field with OCR, and writes your verified values **onto the original page** at the right place. Conflicting, sensitive and signature fields are left blank with a red reason, and a last page lists the source of every value. Print, sign, submit. Chrome autofill cannot touch paper.
 - **Snap any form:** scan or import a real blank form; Kaagaz reads its field labels on device and fills them only from verified facts, each with its source, with tap-to-copy for websites. Sensitive fields (bank, password, OTP, Aadhaar) are flagged, signatures are left to you, and nothing is ever submitted.
 - **Money and insurance:** bills, due dates, duplicates, and paid vs outstanding vs scheduled premiums. Guaranteed and projected benefits are kept separate, waiting periods and exclusions are flagged, and approved reminders use WorkManager.
 - **Today:** up to four plain-language actions, ranked by urgency ("Pay electricity bill · ₹2,340 · due Tue 20 Oct", "Confirm your graduation year: résumé says 2024, certificate says 2023").
@@ -44,7 +45,7 @@ Its core idea is **proof-carrying AI**:
 
 ## Try it in 3 minutes
 
-1. Install `output/demo/Kaagaz-mission-os-v6.apk` on an arm64 Android 8+ phone.
+1. Install `output/demo/Kaagaz-mission-os-v7.apk` on an arm64 Android 8+ phone.
 2. On the home screen, tap **Install demo pack**. Five clearly labelled fictional documents go through the real OCR pipeline.
 3. Follow **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
 
